@@ -47,7 +47,8 @@ jobs:
           echo "using $SDKMANAGER"
           yes | "$SDKMANAGER" --licenses > /dev/null || true
           "$SDKMANAGER" --install \
-            "platforms;android-37" \
+            "platforms;android-37.0" \
+            "platforms;android-37.2" \
             "build-tools;36.0.0" \
             "platform-tools" \
             "ndk;27.2.12479018" \
