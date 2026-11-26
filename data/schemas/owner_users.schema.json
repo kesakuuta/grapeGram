@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/OWNER/grapeGram/main/data/schemas/owner_users.schema.json",
+  "title": "grapeGram owner list",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "owners"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "owners": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[0-9]{5,20}$" }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+name: data-verify
+
+on:
+  push:
+    paths: ["data/**", "scripts/**", "tests/**"]
+  pull_request:
+    paths: ["data/**", "scripts/**", "tests/**"]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Owners are exactly the two project IDs
+        run: |
+          python3 - <<'PY'
+          import json
+          d = json.load(open("data/owner_users.json"))
+          assert d["owners"] == ["7293365262", "960792706"], d
+          assert all(isinstance(x, str) for x in d["owners"])
+          print("owners ok")
+          PY
+      - name: Signature
+        run: |
+          for f in data/badge_users.json data/owner_users.json; do
+            python3 scripts/verify_data.py "$f" "data/signatures/$(basename "$f").sig"
+          done

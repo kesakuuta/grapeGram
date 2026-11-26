@@ -1,0 +1,79 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  data:
+    name: data + crypto tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Verify signatures
+        run: |
+          for f in data/badge_users.json data/owner_users.json; do
+            python3 scripts/verify_data.py "$f" "data/signatures/$(basename "$f").sig"
+          done
+
+  apk:
+    name: android build
+    runs-on: ubuntu-latest
+    needs: data
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Detect client sources
+        id: detect
+        run: |
+          if [ -d TMessagesProj ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::TMessagesProj is absent; client build skipped. Vendor the base fork first (docs/ARCHITECTURE.md)."
+          fi
+      - uses: actions/setup-java@v4
+        if: steps.detect.outputs.present == 'true'
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        if: steps.detect.outputs.present == 'true'
+      - name: NDK + CMake
+        if: steps.detect.outputs.present == 'true'
+        run: |
+          sdkmanager "ndk;27.0.12077973" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0"
+      - name: Python runtime (Chaquopy)
+        if: steps.detect.outputs.present == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: gradle/actions/setup-gradle@v3
+        if: steps.detect.outputs.present == 'true'
+      - name: Debug APK
+        if: steps.detect.outputs.present == 'true'
+        run: ./gradlew :TMessagesProj:assembleDebug --no-daemon
+      - name: Release APK (signed only if secrets exist)
+        if: steps.detect.outputs.present == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew :TMessagesProj:assembleRelease :TMessagesProj:bundleRelease --no-daemon
+      - uses: actions/upload-artifact@v4
+        if: steps.detect.outputs.present == 'true'
+        with:
+          name: grapeGram-apk
+          path: |
+            TMessagesProj/build/outputs/apk/**/*.apk
+            TMessagesProj/build/outputs/bundle/**/*.aab
+          if-no-files-found: warn

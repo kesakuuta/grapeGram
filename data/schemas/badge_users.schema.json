@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/OWNER/grapeGram/main/data/schemas/badge_users.schema.json",
+  "title": "grapeGram badge assignments",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "updated_at", "badges"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "badges": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[0-9]{5,20}$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["badge", "enabled", "record_version"],
+        "properties": {
+          "badge": { "type": "string", "enum": ["grapegram", "founder", "developer", "contributor"] },
+          "enabled": { "type": "boolean" },
+          "granted_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "signature": { "type": "string", "maxLength": 512 },
+          "record_version": { "type": "integer", "minimum": 1 }
+        }
+      }
+    }
+  }
+}

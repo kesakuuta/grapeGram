@@ -1,0 +1,62 @@
+name: badges-sign
+
+# Manual, owner-approved signing. Never triggered by user input alone.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: grant or revoke
+        required: true
+        type: choice
+        options: [grant, revoke]
+      owner_id:
+        description: acting owner Telegram ID (must be in owner_users.json)
+        required: true
+      user_id:
+        description: target Telegram numeric ID (string)
+        required: true
+      badge:
+        description: badge type
+        required: true
+        type: choice
+        options: [grapegram, founder, developer, contributor]
+      reason:
+        description: audit reason
+        required: false
+      confirmation:
+        description: type CONFIRM
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    environment: badge-admin
+    steps:
+      - name: Require explicit confirmation
+        run: |
+          test "${{ inputs.confirmation }}" = "CONFIRM" || { echo "confirmation mismatch"; exit 1; }
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Apply change (validates owner + id + badge)
+        env:
+          GRP_SIGNING_KEY_PEM: ${{ secrets.GRP_SIGNING_KEY_PEM }}
+          OWNER_ID: ${{ inputs.owner_id }}
+          ACTION: ${{ inputs.action }}
+          USER_ID: ${{ inputs.user_id }}
+          BADGE: ${{ inputs.badge }}
+          REASON: ${{ inputs.reason }}
+        run: python3 scripts/apply_change.py
+      - name: Verify result
+        run: python3 scripts/verify_data.py data/badge_users.json data/signatures/badge_users.json.sig
+      - name: Commit
+        run: |
+          git config user.name "grapeGram bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/badge_users.json data/signatures/badge_users.json.sig data/audit.jsonl
+          git diff --cached --quiet || git commit -m "badges: ${{ inputs.action }} ${{ inputs.badge }} for ${{ inputs.user_id }} by ${{ inputs.owner_id }}"
+          git push
