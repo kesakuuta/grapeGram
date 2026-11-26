@@ -123,6 +123,14 @@ class OverlayTests(unittest.TestCase):
         self.assertEqual(r2.returncode, 0, r2.stderr)
         self.assertIn("already applied", r2.stdout)
 
+    def test_module_imports(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("apply_mod", APPLY)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        self.assertTrue(callable(mod.run))
+        self.assertTrue(hasattr(mod, "subprocess"))
+
     def test_missing_anchor_fails(self):
         with open(self.settings, "w", encoding="utf-8") as f:
             f.write("class SettingsActivity {}\n")
