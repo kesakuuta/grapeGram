@@ -12,14 +12,11 @@ Every patch is anchored to exact source text and fails loudly if the base
 changed, instead of silently producing a broken build.
 """
 import argparse
-import io
 import json
 import os
 import re
 import shutil
 import sys
-import tarfile
-import urllib.request
 import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -79,20 +76,29 @@ def patch_once(text, anchor, replacement, what):
     return text.replace(anchor, replacement)
 
 
+def run(cmd, cwd=None, timeout=3600):
+    print("+", " ".join(cmd))
+    r = subprocess.run(cmd, cwd=cwd, timeout=timeout)
+    if r.returncode != 0:
+        die("command failed: " + " ".join(cmd))
+
+
 def download_base(root, cfg):
-    url = (f"https://codeload.github.com/{cfg['base_repo']}/tar.gz/"
-           f"{cfg['base_commit']}")
-    print("downloading", url)
-    with urllib.request.urlopen(url, timeout=600) as r:
-        blob = r.read()
-    print(f"downloaded {len(blob) / 1048576:.0f} MB")
-    with tarfile.open(fileobj=io.BytesIO(blob), mode="r:gz") as tf:
-        members = tf.getmembers()
-        prefix = members[0].name.split("/")[0]
-        for m in members:
-            m.name = m.name[len(prefix) + 1:] if m.name.startswith(prefix + "/") else ""
-        tf.extractall(root, members=[m for m in members if m.name],
-                      filter="data")
+    """Pinned commit + all submodules (tarballs do not include submodules)."""
+    url = f"https://github.com/{cfg['base_repo']}.git"
+    commit = cfg["base_commit"]
+    os.makedirs(root, exist_ok=True)
+    if not os.path.isdir(os.path.join(root, ".git")):
+        run(["git", "init", "-q", root])
+        run(["git", "-C", root, "remote", "add", "origin", url])
+    run(["git", "-C", root, "fetch", "--depth", "1", "origin", commit])
+    run(["git", "-C", root, "checkout", "-q", "--force", "FETCH_HEAD"])
+    try:
+        run(["git", "-C", root, "submodule", "update", "--init", "--recursive",
+             "--depth", "1"])
+    except SystemExit:
+        print("shallow submodules failed, retrying full depth")
+        run(["git", "-C", root, "submodule", "update", "--init", "--recursive"])
 
 
 def main():

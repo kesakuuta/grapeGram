@@ -15,7 +15,7 @@ cp local.properties.example local.properties   # sdk.dir=...
 
 `.github/workflows/build.yml`:
 
-1. checkout, затем `client/apply.py --root base --download` (база + оверлей)
+1. checkout, затем `client/apply.py --root base --download` (pinned commit + сабмодули + оверлей)
 2. JDK 21 (temurin)
 3. Android SDK 37 + build-tools 36 + NDK 27.2 + CMake
 4. Python 3.11 (для Chaquopy)
