@@ -1,0 +1,17 @@
+[package]
+name = "grape-badge-service"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ed25519-dalek = "2"
+serde_json = "1"
+base64 = "0.22"
+
+[lib]
+name = "grape_badge_service"
+path = "src/lib.rs"
+
+[[bin]]
+name = "grape-badge-service"
+path = "src/main.rs"

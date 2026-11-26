@@ -1,0 +1,18 @@
+[package]
+name = "grape-badge-tools"
+version = "0.1.0"
+edition = "2021"
+description = "Ed25519 signing, verification and badge-change tooling for grapeGram"
+license = "GPL-3.0-only"
+publish = false
+
+[dependencies]
+base64 = "0.22"
+ed25519-dalek = "2"
+serde_json = "1"
+sha2 = "0.10"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

@@ -29,5 +29,9 @@ Thumbs.db
 __pycache__/
 *.pyc
 
+# rust
+rust/*/target/
+target/
+
 # runtime data
 data/audit.jsonl
