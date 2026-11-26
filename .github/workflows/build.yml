@@ -27,42 +27,38 @@ jobs:
     name: android build
     runs-on: ubuntu-latest
     needs: data
+    env:
+      GRP_DATA_BASE: ${{ vars.GRP_DATA_BASE || 'https://raw.githubusercontent.com/OWNER/grapeGram/main/data/' }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Detect client sources
-        id: detect
-        run: |
-          if [ -d TMessagesProj ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::TMessagesProj is absent; client build skipped. Vendor the base fork first (docs/ARCHITECTURE.md)."
-          fi
       - uses: actions/setup-java@v4
-        if: steps.detect.outputs.present == 'true'
         with:
           distribution: temurin
-          java-version: "17"
-      - uses: android-actions/setup-android@v3
-        if: steps.detect.outputs.present == 'true'
-      - name: NDK + CMake
-        if: steps.detect.outputs.present == 'true'
-        run: |
-          sdkmanager "ndk;27.0.12077973" "cmake;3.22.1" "platforms;android-35" "build-tools;35.0.0"
-      - name: Python runtime (Chaquopy)
-        if: steps.detect.outputs.present == 'true'
-        uses: actions/setup-python@v5
+          java-version: "21"
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - uses: android-actions/setup-android@v3
+      - name: SDK packages (from base build.gradle)
+        run: |
+          sdkmanager --install \
+            "platforms;android-37" \
+            "build-tools;36.0.0" \
+            "platform-tools" \
+            "ndk;27.2.12479018" \
+            "cmake;3.22.1"
+      - name: Materialise grapeGram (base + overlay)
+        run: python3 client/apply.py --root "$RUNNER_TEMP/base" --download
       - uses: gradle/actions/setup-gradle@v3
-        if: steps.detect.outputs.present == 'true'
+        with:
+          gradle-home-cache-cleanup: true
+      - name: Chaquopy build python
+        run: echo "CHAQUOPY_BUILD_PYTHON=$(command -v python3.11)" >> "$GITHUB_ENV"
       - name: Debug APK
-        if: steps.detect.outputs.present == 'true'
-        run: ./gradlew :TMessagesProj:assembleDebug --no-daemon
-      - name: Release APK (signed only if secrets exist)
-        if: steps.detect.outputs.present == 'true'
+        working-directory: ${{ runner.temp }}/base
+        run: ./gradlew :TMessagesProj:assembleDebug --no-daemon --stacktrace
+      - name: Release APK + AAB
+        working-directory: ${{ runner.temp }}/base
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -70,10 +66,9 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew :TMessagesProj:assembleRelease :TMessagesProj:bundleRelease --no-daemon
       - uses: actions/upload-artifact@v4
-        if: steps.detect.outputs.present == 'true'
         with:
           name: grapeGram-apk
           path: |
-            TMessagesProj/build/outputs/apk/**/*.apk
-            TMessagesProj/build/outputs/bundle/**/*.aab
+            ${{ runner.temp }}/base/TMessagesProj/build/outputs/apk/**/*.apk
+            ${{ runner.temp }}/base/TMessagesProj/build/outputs/bundle/**/*.aab
           if-no-files-found: warn

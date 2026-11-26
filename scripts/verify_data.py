@@ -15,7 +15,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from canonical import canonical_bytes, load  # noqa: E402
+
 
 
 def verify(pub: str, payload: bytes, sig: bytes) -> bool:
@@ -47,7 +47,9 @@ def main() -> int:
     a = ap.parse_args()
     with open(a.sig, "rb") as f:
         sig = base64.b64decode(f.read().strip())
-    ok = verify(a.pub, canonical_bytes(load(a.json)), sig)
+    with open(a.json, "rb") as f:
+        payload = f.read()
+    ok = verify(a.pub, payload, sig)
     print("VALID" if ok else "INVALID")
     return 0 if ok else 1
 

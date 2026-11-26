@@ -1,0 +1,7 @@
+{
+  "base_repo": "exteraless/exteraless",
+  "base_commit": "31a35e4683fb420ee782cdd32f36aea812bf756c",
+  "base_ref": "main",
+  "data_base": "https://raw.githubusercontent.com/OWNER/grapeGram/main/data/",
+  "badge_service": ""
+}

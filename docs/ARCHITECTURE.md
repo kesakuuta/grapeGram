@@ -8,7 +8,8 @@ exteraGram добавляет `com/exteragram/messenger/plugins`, exteraless —
 `app/exteraless` (разрешения, AI, плеер, оформление) и Ayu-базу
 (`com/radolyn/ayugram`).
 
-**Рекомендуемая база: exteraless.** Причины:
+**База зафиксирована: `exteraless/exteraless` @ `31a35e46`** (`client/config.json`).
+CI скачивает её и накладывает оверлей `client/overlay`. Причины:
 1. Самая свежая по объёму кода (29 389 файлов против 15 517 / 16 678).
 2. Уже содержит слой разрешений и аудита — фундамент безопасности.
 3. Уже содержит AI-службу и M3-плеер.

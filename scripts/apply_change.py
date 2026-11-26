@@ -23,11 +23,6 @@ ALLOWED = {"grapegram", "founder", "developer", "contributor"}
 ID_RE = re.compile(r"^[0-9]{5,20}$")
 
 
-def canonical(obj):
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"),
-                      ensure_ascii=False, allow_nan=False).encode("utf-8")
-
-
 def sign(payload, pem):
     with tempfile.NamedTemporaryFile(delete=False) as k:
         k.write(pem)
@@ -83,10 +78,11 @@ def main() -> int:
     doc["version"] = int(doc["version"]) + 1
     doc["updated_at"] = now
 
-    sig = sign(canonical(doc), pem)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(doc, f, ensure_ascii=False, indent=2, sort_keys=True)
         f.write("\n")
+    with open(path, "rb") as f:
+        sig = sign(f.read(), pem)
     os.makedirs(os.path.join(data, "signatures"), exist_ok=True)
     with open(os.path.join(data, "signatures", "badge_users.json.sig"),
               "w", encoding="ascii") as f:

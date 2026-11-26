@@ -100,8 +100,9 @@ class CryptoTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.priv, self.pub = make_key(self.tmp)
-        self.doc = load("badge_users.json")
-        self.payload = canonical_bytes(self.doc)
+        with open(os.path.join(ROOT, "data", "badge_users.json"), "rb") as f:
+            self.payload = f.read()
+        self.doc = json.loads(self.payload)
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -116,7 +117,8 @@ class CryptoTests(unittest.TestCase):
         doc = json.loads(self.payload)
         doc["badges"]["123456789"] = {"badge": "grapegram", "enabled": True,
                                       "record_version": 1}
-        self.assertFalse(verify(self.pub, canonical_bytes(doc), sig))
+        tampered = json.dumps(doc, indent=2, sort_keys=True).encode()
+        self.assertFalse(verify(self.pub, tampered, sig))
 
     def test_other_key_fails(self):
         sig = sign(self.priv, self.payload)
@@ -126,6 +128,16 @@ class CryptoTests(unittest.TestCase):
         subprocess.run(["openssl", "pkey", "-in", other, "-pubout",
                         "-out", other + ".pub"], check=True, capture_output=True)
         self.assertFalse(verify(other + ".pub", self.payload, sig))
+
+    def test_published_files_match_published_key(self):
+        pub = os.path.join(ROOT, "data", "keys", "grapegram_ed25519.pub.pem")
+        for name in ("badge_users.json", "owner_users.json"):
+            with open(os.path.join(ROOT, "data", name), "rb") as f:
+                payload = f.read()
+            with open(os.path.join(ROOT, "data", "signatures",
+                                   name + ".sig"), "rb") as f:
+                sig = base64.b64decode(f.read().strip())
+            self.assertTrue(verify(pub, payload, sig), name)
 
     def test_no_private_key_in_repo(self):
         marker = b"BEGIN " + b"PRIVATE" + b" KEY"
@@ -192,7 +204,8 @@ class StoreTests(unittest.TestCase):
         with open(os.path.join(self.data, "signatures",
                                "badge_users.json.sig"), "rb") as f:
             sig = base64.b64decode(f.read().strip())
-        self.assertTrue(verify(self.pub, canonical_bytes(doc), sig))
+        with open(os.path.join(self.data, "badge_users.json"), "rb") as f:
+            self.assertTrue(verify(self.pub, f.read(), sig))
 
     def test_revoke(self):
         code = self.store.new_challenge()

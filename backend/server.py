@@ -146,8 +146,9 @@ class Store:
         doc["badges"][target] = entry
         doc["version"] = int(doc.get("version", 1)) + 1
         doc["updated_at"] = now
-        sig = _sign(canonical_bytes(doc), signing_key())
         _write_atomic(path, doc)
+        with open(path, "rb") as f:
+            sig = _sign(f.read(), signing_key())
         os.makedirs(os.path.join(self.data_dir, "signatures"), exist_ok=True)
         with open(os.path.join(self.data_dir, "signatures",
                                "badge_users.json.sig"), "w", encoding="ascii") as f:

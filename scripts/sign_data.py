@@ -15,7 +15,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from canonical import canonical_bytes, load  # noqa: E402
+
 
 
 def sign(key: str, payload: bytes) -> bytes:
@@ -40,7 +40,9 @@ def main() -> int:
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     for path in a.files:
-        sig = sign(a.key, canonical_bytes(load(path)))
+        with open(path, "rb") as f:
+            payload = f.read()
+        sig = sign(a.key, payload)
         name = os.path.basename(path) + ".sig"
         dst = os.path.join(a.out, name)
         with open(dst, "w", encoding="ascii") as f:
