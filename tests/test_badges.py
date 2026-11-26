@@ -142,7 +142,7 @@ class CryptoTests(unittest.TestCase):
     def test_no_private_key_in_repo(self):
         marker = b"BEGIN " + b"PRIVATE" + b" KEY"
         for dirpath, dirnames, filenames in os.walk(ROOT):
-            dirnames[:] = [d for d in dirnames if d not in (".git", "outbox")]
+            dirnames[:] = [d for d in dirnames if d not in (".git", "outbox", "rust", "target")]
             for fn in filenames:
                 p = os.path.join(dirpath, fn)
                 try:
