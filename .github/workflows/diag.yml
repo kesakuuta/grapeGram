@@ -1,0 +1,33 @@
+name: diagnose-resources
+on: workflow_dispatch
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    env:
+      BASE_COMMIT: 31a35e4683fb420ee782cdd32f36aea812bf756c
+      GRP_DATA_BASE: https://raw.githubusercontent.com/kesakuuta/grapeGram/main/data/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Base + materializer
+        run: |
+          BASE="$RUNNER_TEMP/base"
+          git init -q "$BASE"
+          git -C "$BASE" remote add origin https://github.com/exteraless/exteraless.git
+          git -C "$BASE" fetch --depth 1 -q origin "$BASE_COMMIT"
+          git -C "$BASE" checkout -q --force FETCH_HEAD
+          git -C "$BASE" submodule update --init --recursive --depth 1 || true
+          cargo build --release --manifest-path rust/materializer/Cargo.toml
+          GRP_ROOT="$GITHUB_WORKSPACE" rust/materializer/target/release/grape-materializer --root "$BASE"
+      - name: Pack values
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          cp -r "$RUNNER_TEMP/base/TMessagesProj/src/main/res/values" "$RUNNER_TEMP/out/"
+          for d in "$RUNNER_TEMP/base/TMessagesProj/src/main/res"/values-*; do
+            [ -d "$d" ] && cp -r "$d" "$RUNNER_TEMP/out/"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: diag-values
+          path: ${{ runner.temp }}/out/**
