@@ -171,11 +171,20 @@ impl Server {
     fn post(&self, request: &Request) -> Result<Response, ApiError> {
         match request.path.as_str() {
             "/challenge" => {
-                let code = self.store.new_challenge()?;
+                let (code, poll_token) = self.store.new_challenge_pair()?;
                 Ok(Response::json(
                     200,
-                    &json!({"code": code, "expires_in": 300}),
+                    &json!({"code": code, "poll_token": poll_token, "expires_in": 300}),
                 ))
+            }
+            "/challenge/status" => {
+                let body = request.body_json()?;
+                let code = body.get("code").and_then(Value::as_str).unwrap_or("");
+                let poll_token = body.get("poll_token").and_then(Value::as_str).unwrap_or("");
+                match self.store.poll_challenge(code, poll_token)? {
+                    Some(session) => Ok(Response::json(200, &json!({"status": "bound", "session": session}))),
+                    None => Ok(Response::json(200, &json!({"status": "pending"}))),
+                }
             }
             "/telegram/webhook" => self.webhook(request),
             "/admin/grant" | "/admin/revoke" => self.admin(request),
