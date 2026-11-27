@@ -119,6 +119,42 @@ jobs:
           git -C "$BASE" checkout -q --force FETCH_HEAD
           git -C "$BASE" submodule update --init --recursive --depth 1 || \
             git -C "$BASE" submodule update --init --recursive
+      - name: Fetch pinned Cherrygram and exteraGram icon resources
+        run: |
+          set -euo pipefail
+          BASE="$RUNNER_TEMP/base"
+          fetch_sparse() {
+            local repo="$1" commit="$2" dir="$3"
+            shift 3
+            git init -q "$dir"
+            git -C "$dir" remote add origin "https://github.com/$repo.git"
+            git -C "$dir" sparse-checkout init --cone
+            git -C "$dir" sparse-checkout set "$@"
+            git -C "$dir" fetch --filter=blob:none --depth 1 -q origin "$commit"
+            git -C "$dir" checkout -q --force FETCH_HEAD
+          }
+
+          fetch_sparse arsLan4k1390/Cherrygram 9e1c901e6fbca5a9a346683b91c6d529376f5304 \
+            "$RUNNER_TEMP/cherrygram-icons" TMessagesProj/src/main/res-cherrygram
+          fetch_sparse exteraSquad/exteraGram b4d852f48f2734a0bee1a74a0939be621612262a \
+            "$RUNNER_TEMP/exteragram-icons" \
+            TMessagesProj/src/main/res-appicons \
+            TMessagesProj/src/main/res/drawable \
+            TMessagesProj/src/main/res/drawable-v31
+
+          RES="$BASE/TMessagesProj/src/main/res"
+          CG="$RUNNER_TEMP/cherrygram-icons/TMessagesProj/src/main/res-cherrygram"
+          mkdir -p "$RES/drawable" "$RES/mipmap-anydpi-v26"
+          cp "$CG"/drawable/icon_background_*.xml "$RES/drawable/"
+          cp "$CG"/drawable/icon_foreground*.xml "$RES/drawable/"
+          cp "$CG"/mipmap-anydpi-v26/icon_launcher_cherry*.xml "$RES/mipmap-anydpi-v26/"
+
+          EG="$RUNNER_TEMP/exteragram-icons/TMessagesProj/src/main"
+          cp -a "$EG/res-appicons/." "$RES/"
+          cp "$EG"/res/drawable/ic_monochrome*.xml "$RES/drawable/"
+          mkdir -p "$RES/drawable-v31"
+          cp "$EG"/res/drawable-v31/ic_foreground_monet.xml "$RES/drawable-v31/"
+          echo "Imported pinned Cherrygram and exteraGram adaptive icon assets"
       - name: Build Rust materializer
         run: cargo build --release --manifest-path rust/materializer/Cargo.toml
       - name: Materialise grapeGram (Rust overlay)
