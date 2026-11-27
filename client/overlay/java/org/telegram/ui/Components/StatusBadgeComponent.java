@@ -85,7 +85,7 @@ public class StatusBadgeComponent {
                     badge.particles,
                     badge.animation);
         } else {
-            currentDrawable = hasStatus ? statusDrawable : null;
+            currentDrawable = statusDrawable;
         }
         return currentDrawable;
     }
