@@ -124,6 +124,7 @@ class Store:
     def __init__(self, data_dir: str):
         self.data_dir = data_dir
         self.lock = threading.Lock()
+        self.mutation_lock = threading.Lock()
         self.challenges = {}
         self.sessions = {}
         self.audit_path = os.path.join(data_dir, "audit.jsonl")
@@ -184,6 +185,11 @@ class Store:
 
     def mutate(self, token: str, target: str, badge: str, enabled: bool,
                reason: str = "", style=None):
+        with self.mutation_lock:
+            return self._mutate_locked(token, target, badge, enabled, reason, style)
+
+    def _mutate_locked(self, token: str, target: str, badge: str, enabled: bool,
+                       reason: str = "", style=None):
         owner = self.require_owner(token)
         if not ID_RE.match(str(target)):
             raise ValueError("bad user id")
