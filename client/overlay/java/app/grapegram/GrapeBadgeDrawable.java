@@ -139,7 +139,7 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
             int iconSize = Math.max(1, (int) (size * (0.72f * pulse)));
             int inset = (size - iconSize) / 2;
             icon.setBounds(badgeLeft + inset, top + inset, badgeLeft + inset + iconSize, top + inset + iconSize);
-            icon.setAlpha(combinedAlpha);
+            icon.setAlpha(combinedAlpha * colorAlpha / 255);
             icon.draw(canvas);
         }
 
