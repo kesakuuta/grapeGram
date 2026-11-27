@@ -19,6 +19,7 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final int size;
     private final int gap;
+    private final int colorAlpha;
     private final boolean reverse;
     private final boolean particles;
     private final String animation;
@@ -54,6 +55,7 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
         this.particles = particles;
         this.animation = animation == null ? "none" : animation;
         background.setColor(badgeColor);
+        colorAlpha = Color.alpha(badgeColor);
         particlesPaint.setColor(Color.WHITE);
         glowPaint.setColor(badgeColor);
         if (primary != null) {
@@ -123,10 +125,10 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
         float radius = size * 0.5f * pulse;
         if ("glow".equals(animation)) {
             int glowAlpha = combinedAlpha * (int) (50 + 35 * (0.5f + 0.5f * (float) Math.sin(phase))) / 255;
-            glowPaint.setAlpha(glowAlpha);
+            glowPaint.setAlpha(glowAlpha * colorAlpha / 255);
             canvas.drawCircle(cx, cy, radius + size * 0.22f, glowPaint);
         }
-        background.setAlpha(combinedAlpha);
+        background.setAlpha(combinedAlpha * colorAlpha / 255);
         canvas.drawCircle(cx, cy, radius, background);
 
         if (icon != null) {
