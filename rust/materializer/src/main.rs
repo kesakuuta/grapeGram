@@ -743,6 +743,34 @@ fn run() -> Result<(), String> {
     }
     write_file(&chats_path, &chats)?;
 
+    let user_cell_path = proj.join("src/main/java/org/telegram/ui/Cells/UserCell.java");
+    let mut user_cell = read_file(&user_cell_path)?;
+    user_cell = patch_once(
+        &user_cell,
+        `        } else {
+            nameTextView.setRightDrawable(null);
+            nameTextView.setRightDrawableTopPadding(0);
+        }
+        if (currentStatus != null) {`,
+        `        } else {
+            nameTextView.setRightDrawable(null);
+            nameTextView.setRightDrawableTopPadding(0);
+        }
+        app.grapegram.GrapeBadges.Entry grapeBadge = currentUser == null ? null
+                : app.grapegram.GrapeBadges.find(getContext(), String.valueOf(currentUser.id));
+        if (grapeBadge != null) {
+            android.graphics.drawable.Drawable grapeIcon = getContext().getDrawable(R.drawable.grape_icon_original);
+            nameTextView.setRightDrawable2(new app.grapegram.GrapeBadgeDrawable(
+                    null, grapeIcon,
+                    app.grapegram.GrapeBadgeDrawable.colorForBadge(grapeBadge.badge), dp(14), 0));
+        } else {
+            nameTextView.setRightDrawable2(null);
+        }
+        if (currentStatus != null) {`,
+        "user cell grapeGram badge",
+    )?;
+    write_file(&user_cell_path, &user_cell)?;
+
     let plugins_path = proj.join("src/main/java/app/exteraless/plugins/ui/PluginsActivity.java");
     let mut plugins = read_file(&plugins_path)?;
     plugins = patch_once(&plugins,
