@@ -60,12 +60,16 @@ public final class GrapeBadges {
 
     private static final String CACHE = "badge_cache.json";
     private static final String CACHE_VER = "badge_cache_version";
+    private static volatile Result memoryCache;
 
     private GrapeBadges() {
     }
 
     public static Result load(Context context, boolean forceNetwork) {
         Result cached = readCache(context);
+        if (cached.ok) {
+            memoryCache = cached;
+        }
         if (!forceNetwork && cached.ok) {
             return cached;
         }
@@ -76,13 +80,24 @@ public final class GrapeBadges {
             fresh = Result.fail(t.getClass().getSimpleName());
         }
         if (fresh.ok) {
+            memoryCache = fresh;
             return fresh;
         }
-        return cached.ok ? cached : fresh;
+        if (cached.ok) {
+            memoryCache = cached;
+            return cached;
+        }
+        return fresh;
     }
 
     public static Entry find(Context context, String userId) {
-        Result r = readCache(context);
+        Result r = memoryCache;
+        if (r == null) {
+            r = readCache(context);
+            if (r.ok) {
+                memoryCache = r;
+            }
+        }
         if (!r.ok || userId == null) {
             return null;
         }
