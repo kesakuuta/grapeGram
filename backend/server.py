@@ -110,6 +110,31 @@ def _sign(payload: bytes, key_pem: bytes) -> bytes:
         os.unlink(data_path)
 
 
+def _verify(payload: bytes, signature_text: bytes, public_key_path: str) -> bool:
+    try:
+        signature = base64.b64decode(signature_text.strip(), validate=True)
+    except Exception:
+        return False
+    data_file = signature_file = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(payload)
+            data_file = f.name
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(signature)
+            signature_file = f.name
+        result = subprocess.run(
+            ["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", public_key_path,
+             "-rawin", "-in", data_file, "-sigfile", signature_file],
+            capture_output=True,
+        )
+        return result.returncode == 0
+    finally:
+        for temp_path in (data_file, signature_file):
+            if temp_path and os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+
 def signing_key() -> bytes:
     pem = os.environ.get("GRP_SIGNING_KEY_PEM")
     if pem:
@@ -131,7 +156,16 @@ class Store:
         self.audit_path = os.path.join(data_dir, "audit.jsonl")
 
     def owners(self):
-        return _load(os.path.join(self.data_dir, "owner_users.json"))["owners"]
+        path = os.path.join(self.data_dir, "owner_users.json")
+        signature_path = os.path.join(self.data_dir, "signatures", "owner_users.json.sig")
+        public_key = os.path.join(self.data_dir, "keys", "grapegram_ed25519.pub.pem")
+        with open(path, "rb") as f:
+            payload = f.read()
+        with open(signature_path, "rb") as f:
+            signature = f.read()
+        if not _verify(payload, signature, public_key):
+            raise PermissionError("owner allowlist signature is invalid")
+        return json.loads(payload)["owners"]
 
     def new_challenge(self) -> str:
         code, _ = self.new_challenge_pair()
@@ -264,27 +298,9 @@ class Store:
 
         data = read_content("badge_users.json")
         signature_text = read_content("signatures/badge_users.json.sig")
-        signature = base64.b64decode(signature_text.strip())
-        public_key = os.path.join(KEY_DIR, "grapegram_ed25519.pub.pem")
-        data_file = signature_file = None
-        try:
-            with tempfile.NamedTemporaryFile(delete=False) as f:
-                f.write(data)
-                data_file = f.name
-            with tempfile.NamedTemporaryFile(delete=False) as f:
-                f.write(signature)
-                signature_file = f.name
-            result = subprocess.run(
-                ["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", public_key,
-                 "-rawin", "-in", data_file, "-sigfile", signature_file],
-                capture_output=True,
-            )
-            if result.returncode != 0:
-                raise RuntimeError("remote badge data signature is invalid")
-        finally:
-            for temp_path in (data_file, signature_file):
-                if temp_path and os.path.exists(temp_path):
-                    os.unlink(temp_path)
+        public_key = os.path.join(self.data_dir, "keys", "grapegram_ed25519.pub.pem")
+        if not _verify(data, signature_text, public_key):
+            raise RuntimeError("remote badge data signature is invalid")
 
         os.makedirs(os.path.join(self.data_dir, "signatures"), exist_ok=True)
         for relative, payload in (
