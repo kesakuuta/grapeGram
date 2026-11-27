@@ -16,14 +16,20 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
     private final int size;
     private final int gap;
     private final int badgeColor;
+    private final boolean reverse;
     private int alpha = 255;
 
     public GrapeBadgeDrawable(Drawable primary, Drawable icon, int badgeColor, int size, int gap) {
+        this(primary, icon, badgeColor, size, gap, false);
+    }
+
+    public GrapeBadgeDrawable(Drawable primary, Drawable icon, int badgeColor, int size, int gap, boolean reverse) {
         this.primary = primary;
         this.icon = icon;
         this.badgeColor = badgeColor;
         this.size = Math.max(1, size);
         this.gap = Math.max(0, gap);
+        this.reverse = reverse;
         if (primary != null) {
             primary.setCallback(this);
         }
@@ -51,19 +57,20 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
         Rect bounds = getBounds();
         int left = bounds.left;
         int top = bounds.top;
+        int badgeLeft = primary == null ? left : left + (reverse ? 0 : size + gap);
+        int primaryLeft = primary == null ? left : left + (reverse ? size + gap : 0);
         if (primary != null) {
-            primary.setBounds(left, top, left + size, top + size);
+            primary.setBounds(primaryLeft, top, primaryLeft + size, top + size);
             primary.setAlpha(alpha);
             primary.draw(canvas);
-            left += size + gap;
         }
-        float cx = left + size / 2f;
+        float cx = badgeLeft + size / 2f;
         float cy = top + size / 2f;
         background.setAlpha(alpha);
         canvas.drawCircle(cx, cy, size / 2f, background);
         if (icon != null) {
             int inset = Math.max(1, size / 7);
-            icon.setBounds(left + inset, top + inset, left + size - inset, top + size - inset);
+            icon.setBounds(badgeLeft + inset, top + inset, badgeLeft + size - inset, top + size - inset);
             icon.setAlpha(alpha);
             icon.draw(canvas);
         }
