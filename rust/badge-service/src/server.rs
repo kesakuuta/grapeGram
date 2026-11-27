@@ -239,10 +239,11 @@ impl Server {
             .and_then(Value::as_str)
             .unwrap_or("grapegram");
         let reason = body.get("reason").and_then(Value::as_str).unwrap_or("");
+        let style = body.get("style");
         let enabled = request.path.ends_with("grant");
         let version = self
             .store
-            .mutate(token, &user_id, badge, enabled, reason)?;
+            .mutate(token, &user_id, badge, enabled, reason, style)?;
         Ok(Response::json(
             200,
             &json!({"ok": true, "version": version}),
