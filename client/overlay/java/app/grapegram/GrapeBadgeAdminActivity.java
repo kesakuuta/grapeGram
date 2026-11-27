@@ -310,6 +310,9 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
                 toast((grant ? "Бейдж выдан" : "Бейдж отозван")
                         + (published ? " и опубликован" : ", но пока не опубликован: настрой GRP_GITHUB_TOKEN на сервере")
                         + ". Версия данных: " + response.optInt("version", -1));
+                if (published) {
+                    GrapeBadgeBridge.syncAsync(context.getApplicationContext());
+                }
             });
         } catch (Exception e) {
             toast("Ошибка подготовки запроса: " + e.getMessage());
