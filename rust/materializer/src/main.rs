@@ -490,7 +490,7 @@ fn upstream_aliases() -> String {
 }
 
 fn upstream_enum_entries() -> String {
-    format!("{} ,\n{}", cherry_enum_entries(), extera_enum_entries())
+    format!("{},\n{}", cherry_enum_entries(), extera_enum_entries())
 }
 
 fn upstream_string_entries() -> String {
@@ -596,9 +596,10 @@ fn run() -> Result<(), String> {
 
     let nox = "NOX(\"NoxIcon\", R.mipmap.icon_2_background_sa, R.mipmap.icon_foreground_sa, R.string.AppIconNox);";
     let enum_replacement = format!(
-        "{},\n{};",
+        "{},\n{},\n{};",
         &nox[..nox.len() - 1],
-        enum_entries()
+        enum_entries(),
+        upstream_enum_entries()
     );
     let mut l = read_file(&launcher_path)?;
     l = patch_once(&l, nox, &enum_replacement, "icon enum")?;
@@ -617,10 +618,14 @@ fn run() -> Result<(), String> {
     write_file(&launcher_path, &l)?;
 
     let mut m = disable_alias(&manifest_before, "org.telegram.messenger.ExteralessIcon")?;
-    let aliases = ICONS
-        .iter()
-        .map(|(key, _)| alias_template(key, *key == "original"))
-        .collect::<String>();
+    let aliases = format!(
+        "{}{}",
+        ICONS
+            .iter()
+            .map(|(key, _)| alias_template(key, *key == "original"))
+            .collect::<String>(),
+        upstream_aliases()
+    );
     m = patch_once(&m, "    </application>", &format!("{}    </application>", aliases), "manifest aliases")?;
     m = patch_application_tag(
         &m,
@@ -640,10 +645,11 @@ fn run() -> Result<(), String> {
     write_file(&manifest_path, &m)?;
 
     let st = read_file(&strings_path)?;
-    let add = ICONS
+    let grape_strings = ICONS
         .iter()
         .map(|(key, name)| format!("    <string name=\"GrapeIcon{}\">{}</string>\n", camel(key), name))
         .collect::<String>();
+    let add = format!("{}{}", grape_strings, upstream_string_entries());
     let (st_new, n) = set_xml_string(&st, "AppName", APP_NAME);
     if n != 1 {
         return Err(format!("strings AppName: found {} times, expected 1", n));
@@ -1109,7 +1115,23 @@ fn run() -> Result<(), String> {
             &manifest,
             &format!("android:name=\"org.telegram.messenger.GrapeIcon{}\"", camel(key)),
             1,
-            "verify aliases",
+            "verify grape aliases",
+        )?;
+    }
+    for (key, _, _, _, _) in CHERRY_ICONS.iter() {
+        expect_count(
+            &manifest,
+            &format!("android:name=\"org.telegram.messenger.CherryIcon{}\"", camel(key)),
+            1,
+            "verify Cherrygram aliases",
+        )?;
+    }
+    for (key, _, _, _) in EXTERA_ICONS.iter() {
+        expect_count(
+            &manifest,
+            &format!("android:name=\"org.telegram.messenger.ExteraIcon{}\"", camel(key)),
+            1,
+            "verify exteraGram aliases",
         )?;
     }
     expect_count(&manifest, "android:enabled=\"true\"\n            android:name=\"org.telegram.messenger.ExteralessIcon\"", 0, "verify old alias disabled")?;
@@ -1146,7 +1168,7 @@ fn run() -> Result<(), String> {
     }
 
     println!(
-        "applied: 9 icon aliases, settings entry, enum, strings, package {}, data_base {}",
+        "applied: {} icon aliases (grapeGram {}, Cherrygram {}, exteraGram {}), settings entry, enum, strings, package {}, data_base {}",
         PACKAGE, data_base
     );
     Ok(())
