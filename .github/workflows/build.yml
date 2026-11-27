@@ -110,11 +110,30 @@ jobs:
       - name: Release APK + AAB (signed)
         working-directory: ${{ runner.temp }}/base
         run: ./gradlew :TMessagesProj:assembleRelease :TMessagesProj:bundleRelease --no-daemon
+      - name: Name artifacts grapeGram
+        run: |
+          python3 - <<'PY'
+          import glob, os, shutil
+          temp = os.environ['RUNNER_TEMP']
+          out = os.path.join(temp, 'artifacts')
+          os.makedirs(out, exist_ok=True)
+          patterns = [
+              os.path.join(temp, 'base/TMessagesProj/build/outputs/apk/**/*.apk'),
+              os.path.join(temp, 'base/TMessagesProj/build/outputs/bundle/**/*.aab'),
+          ]
+          count = 0
+          for pattern in patterns:
+              for path in glob.glob(pattern, recursive=True):
+                  dst = os.path.join(out, 'grapeGram-' + os.path.basename(path))
+                  shutil.copy2(path, dst)
+                  print('artifact:', os.path.basename(dst))
+                  count += 1
+          if count < 3:
+              raise SystemExit('expected debug APK, release APK and AAB, got %d' % count)
+          PY
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: grapeGram-signed
-          path: |
-            ${{ runner.temp }}/base/TMessagesProj/build/outputs/apk/**/*.apk
-            ${{ runner.temp }}/base/TMessagesProj/build/outputs/bundle/**/*.aab
+          path: ${{ runner.temp }}/artifacts/*
           if-no-files-found: error

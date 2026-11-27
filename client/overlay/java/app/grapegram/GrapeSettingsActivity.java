@@ -53,14 +53,20 @@ public class GrapeSettingsActivity extends BaseFragment {
         addHeader(list, context, "grapeGram " + GrapeConfig.VERSION);
 
         addRow(list, context, "Иконка приложения", currentIconTitle(), v -> showIconPicker());
-        addRow(list, context, "Настройки exteraGram / exteraless", "оформление, чаты, AI", v -> {
-            try {
-                presentFragment(new app.exteraless.settings.OpenExteraSettingsActivity());
-            } catch (Throwable t) {
-                toast("Недоступно: " + t.getClass().getSimpleName());
-            }
-        });
-        addRow(list, context, "Плагины", "установка, разрешения, журнал", v -> openPlugins());
+        addRow(list, context, "Оформление", "темы, анимации, Monet",
+                v -> open("app.exteraless.settings.OpenExteraAppearanceActivity"));
+        addRow(list, context, "Чаты", "сообщения, папки, уведомления",
+                v -> open("app.exteraless.settings.OpenExteraChatsActivity"));
+        addRow(list, context, "AyuMoments", "истории и статусы",
+                v -> open("app.exteraless.settings.OpenExteraAyuMomentsActivity"));
+        addRow(list, context, "AI", "провайдеры и модели",
+                v -> open("app.exteraless.ai.ui.AiSettingsActivity"));
+        addRow(list, context, "Плагины", "установка, исходники, AI-анализ",
+                v -> open("app.exteraless.plugins.ui.PluginsActivity"));
+        addRow(list, context, "Разрешения плагинов", "сеть, файлы, сообщения, хуки",
+                v -> open("app.exteraless.plugins.ui.PluginPermissionsActivity"));
+        addRow(list, context, "Журнал активности", "события плагинов и отказы",
+                v -> open("app.exteraless.plugins.ui.PluginActivityLogActivity"));
         addRow(list, context, "Бейджи", "подписанный список из GitHub", v -> showBadges());
         addRow(list, context, "О grapeGram", "версия, авторы, лицензии", v -> showAbout());
 
@@ -100,17 +106,19 @@ public class GrapeSettingsActivity extends BaseFragment {
                 .show();
     }
 
-    private void openPlugins() {
+    private void open(String className) {
         try {
-            Class<?> c = Class.forName("com.exteragram.messenger.plugins.ui.PluginsActivity");
+            Class<?> c = Class.forName(className);
             Object o = c.getDeclaredConstructor().newInstance();
             if (o instanceof BaseFragment) {
                 presentFragment((BaseFragment) o);
                 return;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            toast("Недоступно: " + t.getClass().getSimpleName());
+            return;
         }
-        toast("Экран плагинов недоступен в этой сборке");
+        toast("Экран недоступен в этой сборке");
     }
 
     private void showBadges() {
