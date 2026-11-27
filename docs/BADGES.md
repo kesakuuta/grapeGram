@@ -30,9 +30,10 @@
 Клиент не может выдавать бейджи. Схема:
 
 ```
-App -> POST /challenge                (сервер выдаёт одноразовый код, TTL 5 мин)
+App -> POST /challenge                (код + отдельный секрет опроса, TTL 5 мин)
 User -> бот: /bind <код>              (бот получает настоящий from.id)
-Server -> POST /bind {code}           (сервер сверяет ID с owner_users.json)
+Telegram -> POST /telegram/webhook    (сервер сверяет ID с owner_users.json)
+App -> POST /challenge/status         (секрет опроса выдаёт сессию только создавшему challenge)
 Server -> POST /admin/grant|revoke    (сессия + owner-check + подпись + commit)
 Server -> GitHub: badge_users.json + .sig + история
 App -> GET (подписанные данные) -> проверка -> отображение
