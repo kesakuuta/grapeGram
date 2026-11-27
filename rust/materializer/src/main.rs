@@ -1054,6 +1054,12 @@ fn run() -> Result<(), String> {
     let mut chat_avatar = read_file(&chat_avatar_path)?;
     chat_avatar = patch_once(
         &chat_avatar,
+        "        titleTextView.setText(value);\n        titleTextView.setScrollNonFitText(scrollable || isCentered());\n        rightDrawableIsScam = false;",
+        "        titleTextView.setText(value);\n        titleTextView.setScrollNonFitText(scrollable || isCentered());\n        if (titleTextView.getRightDrawable2() instanceof app.grapegram.GrapeBadgeDrawable) {\n            titleTextView.setRightDrawable2(((app.grapegram.GrapeBadgeDrawable) titleTextView.getRightDrawable2()).getPrimaryDrawable());\n        }\n        rightDrawableIsScam = false;",
+        "chat header unwrap previous grapeGram badge",
+    )?;
+    chat_avatar = patch_once(
+        &chat_avatar,
         "        checkActionBar(animated);\n    }\n\n    private Drawable emojiStatusDefaultDrawable;",
         "        TLRPC.User grapeUser = parentFragment != null ? parentFragment.getCurrentUser() : null;\n        app.grapegram.GrapeBadges.Entry grapeBadge = grapeUser == null ? null\n                : app.grapegram.GrapeBadges.find(getContext(), String.valueOf(grapeUser.id));\n        if (grapeBadge != null && !scam && !fake) {\n            Drawable existingStatus = titleTextView.getRightDrawable2();\n            Drawable grapeIcon = getContext().getDrawable(R.drawable.grape_icon_original);\n            titleTextView.setRightDrawable2(new app.grapegram.GrapeBadgeDrawable(\n                    existingStatus, grapeIcon,\n                    app.grapegram.GrapeBadgeDrawable.colorForBadge(grapeBadge.badge,\n                            Theme.isCurrentThemeDark() ? grapeBadge.colorDark : grapeBadge.colorLight),\n                    AndroidUtilities.dp(18), AndroidUtilities.dp(2), LocaleController.isRTL,\n                    (int) (grapeBadge.alpha * 255), grapeBadge.particles, grapeBadge.animation));\n            rightDrawableIsScamOrVerified = true;\n            rightDrawable2ContentDescription = \"grapeGram badge\";\n        }\n        checkActionBar(animated);\n    }\n\n    private Drawable emojiStatusDefaultDrawable;",
         "chat header grapeGram badge",
