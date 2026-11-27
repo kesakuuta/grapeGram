@@ -1350,8 +1350,8 @@ mod tests {
         assert_eq!(EXTERA_ICONS.len(), 31);
         let cherry = cherry_enum_entries();
         let extera = extera_enum_entries();
-        assert_eq!(cherry.matches("CHERRY_").count(), CHERRY_ICONS.len());
-        assert_eq!(extera.matches("EXTERA_").count(), EXTERA_ICONS.len());
+        assert_eq!(cherry.lines().count(), CHERRY_ICONS.len());
+        assert_eq!(extera.lines().count(), EXTERA_ICONS.len());
         assert!(upstream_aliases().contains("org.telegram.messenger.CherryIconDarkCherry"));
         assert!(upstream_aliases().contains("org.telegram.messenger.ExteraIconNyanCat"));
         assert!(upstream_string_entries().contains("name=\"ExteraIconGoogle26\""));
