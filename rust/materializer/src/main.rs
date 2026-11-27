@@ -480,11 +480,6 @@ fn run() -> Result<(), String> {
     }
 
     let props = set_gradle_property(&read_file(&props_path)?, "APP_PACKAGE", PACKAGE)?;
-    let mut props = props;
-    if !props.contains("org.gradle.warning.mode=none") {
-        props.push_str("org.gradle.warning.mode=none\n");
-        props.push_str("android.javaCompile.suppressSourceTargetDeprecationWarning=true\n");
-    }
     write_file(&props_path, &props)?;
 
     let gs_text = read_file(&gs_path)?;
@@ -519,8 +514,17 @@ fn run() -> Result<(), String> {
         "dependencies {\n    implementation 'org.bouncycastle:bcprov-jdk15to18:1.78'\n",
         "bouncycastle dependency",
     )?;
-    build.push_str("\ntasks.withType(JavaCompile).configureEach { options.compilerArgs += ['-Xlint:-options', '-Xlint:-classfile'] }\n");
     write_file(&build_path, &build)?;
+
+    let pg_path = proj.join("proguard-rules.pro");
+    let mut pg = read_file(&pg_path)?;
+    if !pg.contains("grapegram: keep Ed25519 providers") {
+        pg.push_str("\n# grapegram: keep Ed25519 providers (BC registers them by string name)\n");
+        pg.push_str("-keep class org.bouncycastle.jcajce.provider.asymmetric.edec.** { *; }\n");
+        pg.push_str("-keep class org.bouncycastle.jce.provider.BouncyCastleProvider { *; }\n");
+        pg.push_str("-keepclasseswithmembers,includedescriptorclasses class app.grapegram.GrapeBadges {\n    native <methods>;\n}\n");
+        write_file(&pg_path, &pg)?;
+    }
 
     let locale_path = proj.join("src/main/java/org/telegram/messenger/LocaleController.java");
     let mut locale = read_file(&locale_path)?;
@@ -554,18 +558,6 @@ fn run() -> Result<(), String> {
         "mandatory api keys")?;
     write_file(&login_path, &login)?;
 
-    let cmake_path = proj.join("jni/CMakeLists.txt");
-    let mut cmake = read_file(&cmake_path)?;
-    cmake = patch_once(&cmake,
-        "set(CMAKE_CXX_FLAGS \"-DANDROID -g\")",
-        "set(CMAKE_CXX_FLAGS \"-DANDROID -g -w\")\nset(CMAKE_C_FLAGS \"${CMAKE_C_FLAGS} -w\")",
-        "cmake quiet flags")?;
-    cmake = patch_once(&cmake,
-        "        -Wall -frtti -finline-functions -ffast-math -Oz)",
-        "        -w -frtti -finline-functions -ffast-math -Oz)",
-        "cmake tgnet warnings")?;
-    write_file(&cmake_path, &cmake)?;
-
     let firebase_path = proj.join("src/main/java/org/telegram/messenger/FirebasePhoneNumberVerificationHelper.java");
     let mut firebase = read_file(&firebase_path)?;
     firebase = patch_once(&firebase, "req.api_id = BuildVars.APP_ID;",
@@ -573,6 +565,85 @@ fn run() -> Result<(), String> {
     firebase = patch_once(&firebase, "req.api_hash = BuildVars.APP_HASH;",
         "req.api_hash = tw.nekomimi.nekogram.NekoXConfig.currentAppHash();", "firebase api hash")?;
     write_file(&firebase_path, &firebase)?;
+
+    let chats_path = proj.join("src/main/java/app/exteraless/settings/OpenExteraChatsActivity.java");
+    let mut chats = read_file(&chats_path)?;
+    chats = patch_once(&chats,
+        "    private int linksHeaderRow = -1;",
+        "    private int appIconRow = -1;\n    private int linksHeaderRow = -1;",
+        "chats icon field")?;
+    chats = patch_once(&chats,
+        "        linksHeaderRow = addRow(\"linksHeader\");",
+        "        appIconRow = addRow();\n        linksHeaderRow = addRow(\"linksHeader\");",
+        "chats icon row")?;
+    chats = patch_once(&chats,
+        "        } else if (position == aiChatRow) {\n            presentFragment(new app.exteraless.ai.ui.AiSettingsActivity());\n            return;\n        }",
+        "        } else if (position == appIconRow) {\n            presentFragment(new app.exteraless.appicons.AppIconsActivity());\n            return;\n        } else if (position == aiChatRow) {\n            presentFragment(new app.exteraless.ai.ui.AiSettingsActivity());\n            return;\n        }",
+        "chats icon click")?;
+    chats = patch_once(&chats,
+        "            } else if (position == aiChatRow) {\n                cell.setTextAndIcon(getString(R.string.OEChatsAiChat), aiChatIcon(), true);",
+        "            } else if (position == appIconRow) {\n                cell.setTextAndIcon(\"Иконка приложения\", appIconIcon(), true);\n                cell.setSubtitle(\"Оригинальная, Аметист, Мозаика и другие\");\n            } else if (position == aiChatRow) {\n                cell.setTextAndIcon(getString(R.string.OEChatsAiChat), aiChatIcon(), true);",
+        "chats icon bind")?;
+    chats = patch_once(&chats,
+        "if (position == inlineMathSettingsRow || position == aiChatRow || position == chatSettingsRow || position == menusRow || position == mediaRow) {",
+        "if (position == inlineMathSettingsRow || position == appIconRow || position == aiChatRow || position == chatSettingsRow || position == menusRow || position == mediaRow) {",
+        "chats icon view type")?;
+    if !chats.contains("private static int appIconIcon()") {
+        let end = chats.rfind('}').ok_or("chats final brace")?;
+        chats.insert_str(end, r#"
+    private static int appIconIcon() {
+        return R.drawable.grape_icon_original;
+    }
+"#);
+    }
+    write_file(&chats_path, &chats)?;
+
+    let plugins_path = proj.join("src/main/java/app/exteraless/plugins/ui/PluginsActivity.java");
+    let mut plugins = read_file(&plugins_path)?;
+    plugins = patch_once(&plugins,
+        "    private static final int MENU_INFO = 1;",
+        "    private static final int MENU_INFO = 1;\n    private static final int MENU_LOG = 2;",
+        "plugins log menu id")?;
+    plugins = patch_once(&plugins,
+        "                } else if (id == MENU_INFO) {\n                    presentFragment(new PluginsInfoActivity());",
+        "                } else if (id == MENU_INFO) {\n                    presentFragment(new PluginsInfoActivity());\n                } else if (id == MENU_LOG) {\n                    showLogPicker();",
+        "plugins log menu click")?;
+    plugins = patch_once(&plugins,
+        "        actionBar.createMenu().addItem(MENU_INFO, R.drawable.msg_info);",
+        "        actionBar.createMenu().addItem(MENU_INFO, R.drawable.msg_info);\n        actionBar.createMenu().addItem(MENU_LOG, R.drawable.msg_log);",
+        "plugins log menu button")?;
+    if !plugins.contains("private void showLogPicker()") {
+        let end = plugins.rfind('}').ok_or("plugins final brace")?;
+        plugins.insert_str(end, r#"
+    private void showLogPicker() {
+        final android.content.Context context = getParentActivity();
+        if (context == null) {
+            return;
+        }
+        final java.util.List<app.exteraless.plugins.Plugin> list =
+                app.exteraless.plugins.PluginsController.getInstance().getPluginsSnapshot();
+        if (list == null || list.isEmpty()) {
+            new org.telegram.ui.ActionBar.AlertDialog.Builder(context)
+                    .setTitle("Журнал активности")
+                    .setMessage("Установленных плагинов нет")
+                    .setPositiveButton(org.telegram.messenger.LocaleController.getString(R.string.OK), null)
+                    .show();
+            return;
+        }
+        final CharSequence[] names = new CharSequence[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            names[i] = list.get(i).getDisplayName();
+        }
+        new org.telegram.ui.ActionBar.AlertDialog.Builder(context)
+                .setTitle("Журнал активности")
+                .setItems(names, (dialog, which) ->
+                        presentFragment(new app.exteraless.plugins.ui.PluginActivityLogActivity(list.get(which).id)))
+                .setNegativeButton(org.telegram.messenger.LocaleController.getString(R.string.Cancel), null)
+                .show();
+    }
+"#);
+    }
+    write_file(&plugins_path, &plugins)?;
 
     let app_path = proj.join("src/main/java/org/telegram/messenger/ApplicationLoader.java");
     let mut app = read_file(&app_path)?;

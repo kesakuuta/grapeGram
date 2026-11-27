@@ -8,7 +8,7 @@ jobs:
       BASE_COMMIT: 31a35e4683fb420ee782cdd32f36aea812bf756c
       GRP_DATA_BASE: https://raw.githubusercontent.com/kesakuuta/grapeGram/main/data/
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
       - name: Base + materializer
         run: |
@@ -32,7 +32,7 @@ jobs:
           for d in "$RUNNER_TEMP/base/TMessagesProj/src/main/res"/values-*; do
             [ -d "$d" ] && cp -r "$d" "$RUNNER_TEMP/out/"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.2
         with:
           name: diag-values
           path: ${{ runner.temp }}/out/**

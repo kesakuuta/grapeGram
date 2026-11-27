@@ -18,18 +18,11 @@ import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.UItem;
 import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalRecyclerView;
-import org.telegram.ui.LauncherIconController;
-import org.telegram.ui.LauncherIconController.LauncherIcon;
 import org.telegram.ui.SettingsActivity.SettingCell;
 
 import java.util.ArrayList;
-import java.util.List;
 
 import app.exteraless.ai.ui.AiSettingsActivity;
-import app.exteraless.plugins.Plugin;
-import app.exteraless.plugins.PluginsController;
-import app.exteraless.plugins.ui.PluginActivityLogActivity;
-import app.exteraless.plugins.ui.PluginPermissionsActivity;
 import app.exteraless.plugins.ui.PluginsActivity;
 import app.exteraless.settings.OpenExteraAppearanceActivity;
 import app.exteraless.settings.OpenExteraAyuMomentsActivity;
@@ -38,16 +31,14 @@ import app.exteraless.settings.OpenExteraChatsActivity;
 /** The single grapeGram settings hub, built from Telegram's own settings cells. */
 public class GrapeSettingsActivity extends BaseFragment {
 
-    private static final int ID_ICON = 1;
-    private static final int ID_APPEARANCE = 2;
-    private static final int ID_CHATS = 3;
-    private static final int ID_AYU = 4;
-    private static final int ID_AI = 5;
-    private static final int ID_PLUGINS = 6;
-    private static final int ID_PLUGIN_PERMISSIONS = 7;
-    private static final int ID_PLUGIN_LOG = 8;
-    private static final int ID_BADGES = 9;
-    private static final int ID_ABOUT = 10;
+    private static final int ID_APPEARANCE = 1;
+    private static final int ID_CHATS = 2;
+    private static final int ID_AYU = 3;
+    private static final int ID_AI = 4;
+    private static final int ID_PLUGINS = 5;
+    private static final int ID_BADGES = 6;
+    private static final int ID_CREDITS = 7;
+    private static final int ID_ABOUT = 8;
 
     private UniversalRecyclerView listView;
 
@@ -83,16 +74,13 @@ public class GrapeSettingsActivity extends BaseFragment {
 
     private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
         items.add(UItem.asHeader("grapeGram " + GrapeConfig.VERSION));
-        items.add(SettingCell.Factory.of(
-                ID_ICON, 0xFF7C4DFF, 0xFF5E35B1, R.drawable.grape_icon_original,
-                "Иконка приложения", null, currentIconTitle()));
         items.add(UItem.asShadow(null));
 
         items.add(UItem.asHeader("Внешний вид"));
         items.add(row(ID_APPEARANCE, IconBackgroundColors.PURPLE, R.drawable.settings_account,
                 "Оформление", "темы, анимации, Monet"));
         items.add(row(ID_CHATS, IconBackgroundColors.BLUE, R.drawable.settings_chat,
-                "Чаты", "сообщения, папки, уведомления"));
+                "Чаты", "сообщения, папки, иконка приложения"));
         items.add(row(ID_AYU, IconBackgroundColors.ORANGE, R.drawable.settings_folders,
                 "AyuMoments", "истории и статусы"));
         items.add(UItem.asShadow(null));
@@ -101,18 +89,16 @@ public class GrapeSettingsActivity extends BaseFragment {
         items.add(row(ID_AI, IconBackgroundColors.CYAN, R.drawable.msg_bot,
                 "AI", "провайдеры и модели"));
         items.add(row(ID_PLUGINS, IconBackgroundColors.GREEN, R.drawable.settings_premium,
-                "Плагины", "установка, исходники, AI-анализ"));
-        items.add(row(ID_PLUGIN_PERMISSIONS, IconBackgroundColors.RED, R.drawable.msg_permissions_solar,
-                "Разрешения плагинов", "сеть, файлы, сообщения, хуки"));
-        items.add(row(ID_PLUGIN_LOG, IconBackgroundColors.GRAY, R.drawable.settings_data,
-                "Журнал активности", "события плагинов и отказы"));
+                "Плагины", "установка, разрешения, исходники, AI-анализ, журнал"));
         items.add(UItem.asShadow(null));
 
         items.add(UItem.asHeader("О приложении"));
         items.add(row(ID_BADGES, IconBackgroundColors.BLUE_DEEP, R.drawable.filled_profile_settings,
                 "Бейджи", "подписанный список из GitHub"));
-        items.add(row(ID_ABOUT, IconBackgroundColors.ORANGE_DEEP, R.drawable.settings_ask,
-                "О grapeGram", "версия, авторы, лицензии"));
+        items.add(row(ID_CREDITS, IconBackgroundColors.ORANGE_DEEP, R.drawable.settings_ask,
+                "Авторы и благодарности", "Cherrygram · exteraGram · exteraless"));
+        items.add(row(ID_ABOUT, IconBackgroundColors.GRAY, R.drawable.msg_info,
+                "О grapeGram", "версия и лицензия"));
     }
 
     private static UItem row(int id, IconBackgroundColors colors, int icon, String title, String subtitle) {
@@ -121,9 +107,6 @@ public class GrapeSettingsActivity extends BaseFragment {
 
     private void onClick(UItem item, View view, int position, float x, float y) {
         switch (item.id) {
-            case ID_ICON:
-                showIconPicker();
-                break;
             case ID_APPEARANCE:
                 presentFragment(new OpenExteraAppearanceActivity());
                 break;
@@ -139,14 +122,11 @@ public class GrapeSettingsActivity extends BaseFragment {
             case ID_PLUGINS:
                 presentFragment(new PluginsActivity());
                 break;
-            case ID_PLUGIN_PERMISSIONS:
-                showPluginPicker(true);
-                break;
-            case ID_PLUGIN_LOG:
-                showPluginPicker(false);
-                break;
             case ID_BADGES:
                 showBadges();
+                break;
+            case ID_CREDITS:
+                presentFragment(new GrapeCreditsActivity());
                 break;
             case ID_ABOUT:
                 showAbout();
@@ -154,72 +134,6 @@ public class GrapeSettingsActivity extends BaseFragment {
             default:
                 break;
         }
-    }
-
-    private String currentIconTitle() {
-        for (LauncherIcon icon : LauncherIcon.values()) {
-            if (icon.name().startsWith("GRAPE_") && LauncherIconController.isEnabled(icon)) {
-                return LocaleController.getString(icon.title);
-            }
-        }
-        return "Оригинальная";
-    }
-
-    private void showIconPicker() {
-        final List<LauncherIcon> icons = new ArrayList<>();
-        final List<CharSequence> titles = new ArrayList<>();
-        for (LauncherIcon icon : LauncherIcon.values()) {
-            if (icon.name().startsWith("GRAPE_")) {
-                icons.add(icon);
-                titles.add(LocaleController.getString(icon.title));
-            }
-        }
-        if (icons.isEmpty()) {
-            toast("Иконки не найдены");
-            return;
-        }
-        if (getParentActivity() == null) {
-            return;
-        }
-        new AlertDialog.Builder(getParentActivity())
-                .setTitle("Иконка приложения")
-                .setItems(titles.toArray(new CharSequence[0]), (dialog, which) -> {
-                    LauncherIconController.setIcon(icons.get(which));
-                    toast("Иконка: " + titles.get(which));
-                    if (listView != null && listView.adapter != null) {
-                        listView.adapter.update(true);
-                    }
-                })
-                .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
-                .show();
-    }
-
-    private void showPluginPicker(boolean permissions) {
-        final Context context = getParentActivity();
-        if (context == null) {
-            return;
-        }
-        final List<Plugin> plugins = PluginsController.getInstance().getPluginsSnapshot();
-        if (plugins == null || plugins.isEmpty()) {
-            presentFragment(new PluginsActivity());
-            return;
-        }
-        final CharSequence[] names = new CharSequence[plugins.size()];
-        for (int i = 0; i < plugins.size(); i++) {
-            names[i] = plugins.get(i).getDisplayName();
-        }
-        new AlertDialog.Builder(context)
-                .setTitle(permissions ? "Разрешения плагинов" : "Журнал активности")
-                .setItems(names, (dialog, which) -> {
-                    final String pluginId = plugins.get(which).id;
-                    if (permissions) {
-                        presentFragment(new PluginPermissionsActivity(pluginId));
-                    } else {
-                        presentFragment(new PluginActivityLogActivity(pluginId));
-                    }
-                })
-                .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
-                .show();
     }
 
     private void showBadges() {
@@ -241,6 +155,7 @@ public class GrapeSettingsActivity extends BaseFragment {
                     toast("Бейджи: " + result.error);
                     return;
                 }
+                GrapeBadgeBridge.syncAsync(context.getApplicationContext());
                 StringBuilder sb = new StringBuilder();
                 for (GrapeBadges.Entry e : result.entries) {
                     if (e.enabled) {

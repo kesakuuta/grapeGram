@@ -3,8 +3,6 @@ package app.grapegram;
 import android.content.Context;
 import android.util.Base64;
 
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
@@ -17,14 +15,11 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.PublicKey;
-import java.security.Security;
 import java.security.Signature;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
 
 /**
  * Fetches, verifies and caches the signed badge list.
@@ -105,7 +100,8 @@ public final class GrapeBadges {
                 new String(get(GrapeConfig.DATA_BASE + "signatures/badge_users.json.sig"),
                         StandardCharsets.US_ASCII).trim(), Base64.DEFAULT);
         JSONObject doc = new JSONObject(new String(data, StandardCharsets.UTF_8));
-        if (!verify(GrapeConfig.PUBLIC_KEY_PEM, canonicalize(doc).getBytes(StandardCharsets.UTF_8), sig)) {
+        // Signing tools sign the raw file bytes, not a re-serialized document.
+        if (!verify(GrapeConfig.PUBLIC_KEY_PEM, data, sig)) {
             return Result.fail("подпись недействительна");
         }
         int version = doc.optInt("version", 0);
@@ -131,83 +127,37 @@ public final class GrapeBadges {
         return r;
     }
 
-    private static boolean verify(String pem, byte[] data, byte[] sig) throws Exception {
-        Security.addProvider(new BouncyCastleProvider());
+    private static boolean verify(String pem, byte[] data, byte[] sig) {
         String body = pem.replace("-----BEGIN PUBLIC KEY-----", "")
                 .replace("-----END PUBLIC KEY-----", "").replaceAll("\\s", "");
-        PublicKey key = KeyFactory.getInstance("Ed25519", "BC")
-                .generatePublic(new X509EncodedKeySpec(Base64.decode(body, Base64.DEFAULT)));
-        Signature s = Signature.getInstance("Ed25519", "BC");
-        s.initVerify(key);
-        s.update(data);
-        return s.verify(sig);
-    }
-
-    /** JCS-like canonical form: sorted keys, no whitespace, literal UTF-8. */
-    private static String canonicalize(Object value) {
-        if (value == null) {
-            return "null";
+        byte[] keyBytes;
+        try {
+            keyBytes = Base64.decode(body, Base64.DEFAULT);
+        } catch (Throwable ignore) {
+            return false;
         }
-        if (value instanceof String) {
-            return quote((String) value);
-        }
-        if (value instanceof Boolean || value instanceof Number) {
-            return value.toString();
-        }
-        if (value instanceof JSONObject) {
-            JSONObject object = (JSONObject) value;
-            TreeMap<String, String> parts = new TreeMap<>();
-            Iterator<String> keys = object.keys();
-            while (keys.hasNext()) {
-                String key = keys.next();
-                parts.put(key, canonicalize(object.opt(key)));
-            }
-            StringBuilder out = new StringBuilder("{");
-            boolean first = true;
-            for (Map.Entry<String, String> entry : parts.entrySet()) {
-                if (!first) {
-                    out.append(',');
+        // R8 strips BC's string-named EdDSA providers in release builds, so try the
+        // platform provider (Android 13+) first and fall back to BC if present.
+        String[] providers = {null, "AndroidOpenSSL", "BC", "Conscrypt"};
+        for (String provider : providers) {
+            try {
+                KeyFactory kf = provider == null
+                        ? KeyFactory.getInstance("Ed25519")
+                        : KeyFactory.getInstance("Ed25519", provider);
+                PublicKey key = kf.generatePublic(new X509EncodedKeySpec(keyBytes));
+                Signature s = provider == null
+                        ? Signature.getInstance("Ed25519")
+                        : Signature.getInstance("Ed25519", provider);
+                s.initVerify(key);
+                s.update(data);
+                if (s.verify(sig)) {
+                    return true;
                 }
-                first = false;
-                out.append(quote(entry.getKey())).append(':').append(entry.getValue());
-            }
-            return out.append('}').toString();
-        }
-        if (value instanceof JSONArray) {
-            JSONArray array = (JSONArray) value;
-            StringBuilder out = new StringBuilder("[");
-            for (int i = 0; i < array.length(); i++) {
-                if (i > 0) {
-                    out.append(',');
-                }
-                out.append(canonicalize(array.opt(i)));
-            }
-            return out.append(']').toString();
-        }
-        return "null";
-    }
-
-    private static String quote(String value) {
-        StringBuilder out = new StringBuilder(value.length() + 2).append('"');
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            switch (c) {
-                case '"': out.append("\\\""); break;
-                case '\\': out.append("\\\\"); break;
-                case '\b': out.append("\\b"); break;
-                case '\f': out.append("\\f"); break;
-                case '\n': out.append("\\n"); break;
-                case '\r': out.append("\\r"); break;
-                case '\t': out.append("\\t"); break;
-                default:
-                    if (c < 0x20) {
-                        out.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        out.append(c);
-                    }
+            } catch (Throwable ignore) {
+                // try the next provider
             }
         }
-        return out.append('"').toString();
+        return false;
     }
 
     private static byte[] get(String url) throws Exception {

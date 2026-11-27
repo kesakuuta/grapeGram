@@ -1,10 +1,7 @@
 use std::collections::HashMap;
-use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
-use std::process;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -288,7 +285,8 @@ fn write_atomic(path: &Path, value: &Value) -> Result<(), ApiError> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicU64;
+    use std::env;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     use super::*;
 
