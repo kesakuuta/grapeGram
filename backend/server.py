@@ -354,9 +354,11 @@ class Handler(BaseHTTPRequestHandler):
                 text = (msg.get("text") or "").strip()
                 if not text.startswith("/bind "):
                     return self._json(200, {"ok": True})
-                token = STORE.bind(text.split(None, 1)[1].upper(),
-                                   msg.get("from", {}).get("id"))
-                return self._json(200, {"ok": True, "session": token})
+                STORE.bind(text.split(None, 1)[1].upper(),
+                            msg.get("from", {}).get("id"))
+                # The app obtains the session through its private poll token;
+                # never return it in Telegram's webhook response.
+                return self._json(200, {"ok": True})
             if self.path in ("/admin/grant", "/admin/revoke"):
                 doc = STORE.mutate(self._auth(), str(body.get("user_id")),
                                    body.get("badge", "grapegram"),
