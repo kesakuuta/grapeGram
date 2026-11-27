@@ -247,7 +247,7 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
         style.setHint("Стиль бейджа JSON");
         style.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         style.setMinLines(3);
-        style.setText("{\n  \"color_light\": \"#7852C8\",\n  \"color_dark\": \"#B18BE8\",\n  \"alpha\": 1.0,\n  \"particles\": false,\n  \"animation\": \"none\"\n}");
+        style.setText("{\n  \"alpha\": 1.0,\n  \"particles\": false,\n  \"animation\": \"none\"\n}");
         BadgePreviewView preview = new BadgePreviewView(context);
         preview.setStyle(style.getText().toString());
         style.addTextChangedListener(new TextWatcher() {
