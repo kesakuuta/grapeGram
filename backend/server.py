@@ -196,6 +196,9 @@ class Store:
             raise ValueError("bad user id")
         if badge not in ALLOWED_BADGES:
             raise ValueError("unknown badge")
+        # The container filesystem may be ephemeral. Always start from the
+        # latest signed repository state before applying another mutation.
+        self._pull_github()
         path = os.path.join(self.data_dir, "badge_users.json")
         doc = _load(path)
         now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -226,6 +229,73 @@ class Store:
         # client or data-verification run can observe a mismatched pair.
         doc["_published"] = self._publish_github()
         return doc
+
+    def _pull_github(self):
+        token = os.environ.get("GRP_GITHUB_TOKEN", "").strip()
+        repo = os.environ.get("GRP_GITHUB_REPO", "").strip()
+        if not token or not repo:
+            return
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+            raise ValueError("invalid GRP_GITHUB_REPO")
+        branch = os.environ.get("GRP_GITHUB_BRANCH", "main").strip() or "main"
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": "Bearer " + token,
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "grapeGram-badge-service",
+        }
+
+        def read_content(name):
+            endpoint = "https://api.github.com/repos/{}/contents/data/{}".format(
+                repo, quote(name, safe="/"))
+            request = Request(endpoint + "?ref=" + quote(branch, safe=""),
+                              headers=headers, method="GET")
+            with urlopen(request, timeout=30) as response:
+                document = json.loads(response.read().decode("utf-8"))
+            if document.get("encoding") != "base64":
+                raise RuntimeError("GitHub returned an unsupported data encoding")
+            return base64.b64decode(document.get("content", ""))
+
+        data = read_content("badge_users.json")
+        signature_text = read_content("signatures/badge_users.json.sig")
+        signature = base64.b64decode(signature_text.strip())
+        public_key = os.path.join(KEY_DIR, "grapegram_ed25519.pub.pem")
+        data_file = signature_file = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False) as f:
+                f.write(data)
+                data_file = f.name
+            with tempfile.NamedTemporaryFile(delete=False) as f:
+                f.write(signature)
+                signature_file = f.name
+            result = subprocess.run(
+                ["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", public_key,
+                 "-rawin", "-in", data_file, "-sigfile", signature_file],
+                capture_output=True,
+            )
+            if result.returncode != 0:
+                raise RuntimeError("remote badge data signature is invalid")
+        finally:
+            for temp_path in (data_file, signature_file):
+                if temp_path and os.path.exists(temp_path):
+                    os.unlink(temp_path)
+
+        os.makedirs(os.path.join(self.data_dir, "signatures"), exist_ok=True)
+        for relative, payload in (
+            ("badge_users.json", data),
+            ("signatures/badge_users.json.sig", signature_text),
+        ):
+            destination = os.path.join(self.data_dir, relative)
+            fd, temp_path = tempfile.mkstemp(prefix=".badge-sync-", dir=os.path.dirname(destination))
+            try:
+                with os.fdopen(fd, "wb") as f:
+                    f.write(payload)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temp_path, destination)
+            finally:
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
 
     def _publish_github(self):
         token = os.environ.get("GRP_GITHUB_TOKEN", "").strip()
