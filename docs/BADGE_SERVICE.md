@@ -22,6 +22,14 @@ The service uses `GRP_GITHUB_REPO=kesakuuta/grapeGram` and
 `GRP_GITHUB_BRANCH=main` from the Blueprint. Do not expose the private
 signing key or GitHub token to the Android application.
 
+The free Render plan is suitable for testing, not always-on production use:
+it can spin down after 15 minutes without traffic, takes about a minute to
+wake, and its local filesystem is ephemeral. The service therefore reloads
+the latest signed badge document from GitHub before each mutation and merges
+the remote audit log before publishing. Owner sessions are memory-only; after
+a service restart or spin-down, reconnect through Telegram. The app allows
+longer request timeouts for these cold starts.
+
 ## Telegram owner binding
 
 1. Set the Telegram bot webhook to
