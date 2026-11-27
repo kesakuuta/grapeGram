@@ -104,6 +104,11 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
                         toast("Используй HTTPS");
                         return;
                     }
+                    if (!GrapeConfig.badgeService(context).equals(value)) {
+                        GrapeConfig.setString(context, SESSION_KEY, "");
+                        GrapeConfig.setString(context, PENDING_CODE, "");
+                        GrapeConfig.setString(context, PENDING_POLL, "");
+                    }
                     GrapeConfig.setBadgeService(context, value);
                     toast("Адрес сохранён");
                 }).show();
