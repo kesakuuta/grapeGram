@@ -37,6 +37,7 @@ struct Inner {
 pub struct Store {
     data_dir: PathBuf,
     inner: Mutex<Inner>,
+    mutation: Mutex<()>,
 }
 
 fn now_seconds() -> f64 {
@@ -148,6 +149,7 @@ impl Store {
                 challenges: HashMap::new(),
                 sessions: HashMap::new(),
             }),
+            mutation: Mutex::new(()),
         }
     }
 
@@ -264,6 +266,10 @@ impl Store {
         reason: &str,
         style: Option<&Value>,
     ) -> Result<u64, ApiError> {
+        let _mutation_guard = self
+            .mutation
+            .lock()
+            .map_err(|_| internal("badge mutation lock is poisoned"))?;
         let owner = self.require_owner(token)?;
         if !id_is_valid(target) {
             return Err(bad_request("bad user id"));
