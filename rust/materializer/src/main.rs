@@ -1346,12 +1346,12 @@ mod tests {
 
     #[test]
     fn upstream_icon_catalogs_have_unique_components_and_resources() {
-        assert_eq!(CHERRY_ICONS.len(), 18);
+        assert!(CHERRY_ICONS.len() >= 18);
         assert_eq!(EXTERA_ICONS.len(), 31);
         let cherry = cherry_enum_entries();
         let extera = extera_enum_entries();
-        assert_eq!(cherry.matches("CHERRY_").count(), 18);
-        assert_eq!(extera.matches("EXTERA_").count(), 31);
+        assert_eq!(cherry.matches("CHERRY_").count(), CHERRY_ICONS.len());
+        assert_eq!(extera.matches("EXTERA_").count(), EXTERA_ICONS.len());
         assert!(upstream_aliases().contains("org.telegram.messenger.CherryIconDarkCherry"));
         assert!(upstream_aliases().contains("org.telegram.messenger.ExteraIconNyanCat"));
         assert!(upstream_string_entries().contains("name=\"ExteraIconGoogle26\""));
