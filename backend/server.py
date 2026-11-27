@@ -247,14 +247,31 @@ class Store:
             endpoint = "https://api.github.com/repos/{}/contents/data/{}".format(
                 repo, quote(name, safe="/"))
             sha = None
+            remote_doc = None
             try:
                 request = Request(endpoint + "?ref=" + quote(branch, safe=""),
                                   headers=headers, method="GET")
                 with urlopen(request, timeout=20) as response:
-                    sha = json.loads(response.read().decode("utf-8")).get("sha")
+                    remote_doc = json.loads(response.read().decode("utf-8"))
+                    sha = remote_doc.get("sha")
             except HTTPError as error:
                 if error.code != 404:
                     raise
+
+            local_path = os.path.join(self.data_dir, name)
+            with open(local_path, "rb") as f:
+                local_bytes = f.read()
+            if name == "audit.jsonl" and remote_doc:
+                remote_bytes = base64.b64decode(remote_doc.get("content", ""))
+                remote_lines = remote_bytes.splitlines()
+                known = set(remote_lines)
+                merged_lines = remote_lines + [
+                    line for line in local_bytes.splitlines() if line and line not in known
+                ]
+                local_bytes = b"\\n".join(merged_lines) + (b"\\n" if merged_lines else b"")
+                with open(local_path, "wb") as f:
+                    f.write(local_bytes)
+            encoded = base64.b64encode(local_bytes).decode("ascii")
             payload = {
                 "message": "badge service: publish signed badge assignments",
                 "content": encoded,
