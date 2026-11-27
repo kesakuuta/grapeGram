@@ -267,7 +267,7 @@ class Store:
         merged_lines = remote_lines + [
             line for line in local_audit.splitlines() if line and line not in known
         ]
-        merged_audit = b"\\n".join(merged_lines) + (b"\\n" if merged_lines else b"")
+        merged_audit = b"\n".join(merged_lines) + (b"\n" if merged_lines else b"")
         with open(audit_path, "wb") as f:
             f.write(merged_audit)
 
