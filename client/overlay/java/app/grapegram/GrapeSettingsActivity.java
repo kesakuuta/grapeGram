@@ -146,7 +146,19 @@ public class GrapeSettingsActivity extends BaseFragment {
                 } catch (Throwable ignored) {
                 }
                 if (!result.ok) {
-                    toast("Бейджи: " + result.error);
+                    long ownerId = org.telegram.messenger.UserConfig.getInstance(
+                            org.telegram.messenger.UserConfig.selectedAccount).clientUserId;
+                    if (GrapeConfig.isBadgeOwner(ownerId)) {
+                        new AlertDialog.Builder(context)
+                                .setTitle("Бейджи")
+                                .setMessage("Не удалось загрузить подписанный список: " + result.error)
+                                .setPositiveButton(LocaleController.getString(R.string.OK), null)
+                                .setNeutralButton("Управление", (dialog, which) ->
+                                        presentFragment(new GrapeBadgeAdminActivity()))
+                                .show();
+                    } else {
+                        toast("Бейджи: " + result.error);
+                    }
                     return;
                 }
                 GrapeBadgeBridge.syncAsync(context.getApplicationContext());
