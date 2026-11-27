@@ -71,16 +71,17 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
     }
 
     public static int colorForBadge(String badge) {
+        boolean dark = org.telegram.ui.ActionBar.Theme.isCurrentThemeDark();
         if ("founder".equals(badge)) {
-            return 0xFFE0A52B;
+            return dark ? 0xFFF0C46A : 0xFFD99A20;
         }
         if ("developer".equals(badge)) {
-            return 0xFF8757D9;
+            return dark ? 0xFFB18BE8 : 0xFF8757D9;
         }
         if ("contributor".equals(badge)) {
-            return 0xFF259F91;
+            return dark ? 0xFF63C7B6 : 0xFF259F91;
         }
-        return 0xFF7852C8;
+        return dark ? 0xFFB18BE8 : 0xFF7852C8;
     }
 
     public static int colorForBadge(String badge, String override) {
