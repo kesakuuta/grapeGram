@@ -122,6 +122,54 @@ fn patch_once(text: &str, anchor: &str, replacement: &str, what: &str) -> Result
     Ok(text.replacen(anchor, replacement, 1))
 }
 
+/// Replaces the old app name inside `<string>` text nodes only, so resource names
+/// such as `exteraless_icon_tile` and `@drawable/...` references stay intact.
+fn rebrand_xml_strings(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    loop {
+        let idx = match [rest.find("<string "), rest.find("<string>")]
+            .into_iter()
+            .flatten()
+            .min()
+        {
+            Some(v) => v,
+            None => {
+                out.push_str(rest);
+                break;
+            }
+        };
+        out.push_str(&rest[..idx]);
+        let after = &rest[idx..];
+        let gt = match after.find('>') {
+            Some(g) => g,
+            None => {
+                out.push_str(after);
+                break;
+            }
+        };
+        let open_end = idx + gt + 1;
+        out.push_str(&rest[idx..open_end]);
+        let tail = &rest[open_end..];
+        let close = match tail.find("</string>") {
+            Some(c) => c,
+            None => {
+                out.push_str(tail);
+                break;
+            }
+        };
+        let content = &tail[..close];
+        out.push_str(
+            &content
+                .replace("exteraless", "grapeGram")
+                .replace("Exteraless", "grapeGram"),
+        );
+        out.push_str("</string>");
+        rest = &tail[close + "</string>".len()..];
+    }
+    out
+}
+
 fn expect_count(text: &str, needle: &str, expected: usize, what: &str) -> Result<(), String> {
     let n = text.matches(needle).count();
     if n != expected {
@@ -479,20 +527,6 @@ fn run() -> Result<(), String> {
         write_file(&path, &text)?;
     }
 
-    let rebrand: [(&str, &str); 12] = [
-        (">exteraless<", ">grapeGram<"),
-        ("Leave blank to use exteraless", "Leave blank to use grapeGram"),
-        ("Exports from exteraless and AyuGram", "Exports from grapeGram and AyuGram"),
-        ("Keep your exteraless settings", "Keep your grapeGram settings"),
-        ("the exteraless logo", "the grapeGram logo"),
-        ("links that exteraless and other clients", "links that grapeGram and other clients"),
-        ("option in exteraless settings", "option in grapeGram settings"),
-        ("users of **exteraless**", "users of **grapeGram**"),
-        ("exteraless Preferences", "grapeGram Preferences"),
-        ("exteraless crashed", "grapeGram crashed"),
-        ("exteraless preferences have been reset", "grapeGram preferences have been reset"),
-        ("exteraless preferences", "grapeGram preferences"),
-    ];
     for entry in fs::read_dir(&res_dir).map_err(|e| format!("read dir {}: {}", res_dir.display(), e))? {
         let entry = entry.map_err(|e| format!("read dir {}: {}", res_dir.display(), e))?;
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -507,15 +541,10 @@ fn run() -> Result<(), String> {
             if path.extension().and_then(|e| e.to_str()) != Some("xml") || !path.is_file() {
                 continue;
             }
-            let mut text = read_file(&path)?;
-            let mut changed = false;
-            for (from, to) in rebrand {
-                if text.contains(from) {
-                    text = text.replace(from, to);
-                    changed = true;
-                }
-            }
-            if changed {
+            let original = read_file(&path)?;
+            let mut text = original.replace(">exteraless<", ">grapeGram<");
+            text = rebrand_xml_strings(&text);
+            if text != original {
                 write_file(&path, &text)?;
             }
         }
