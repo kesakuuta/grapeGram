@@ -286,6 +286,7 @@ fn write_atomic(path: &Path, value: &Value) -> Result<(), ApiError> {
 #[cfg(test)]
 mod tests {
     use std::env;
+    use std::process;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     use super::*;
