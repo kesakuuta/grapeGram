@@ -336,8 +336,10 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
                 float alpha = (float) style.optDouble("alpha", 1.0);
                 boolean particles = style.optBoolean("particles", false);
                 String animation = style.optString("animation", "none");
-                Drawable next = new GrapeBadgeDrawable(getContext(), null, color,
-                        alpha, particles, animation, false);
+                Drawable icon = getContext().getDrawable(R.drawable.grape_icon_original);
+                int alphaValue = (int) (Math.max(0.0, Math.min(1.0, alpha)) * 255.0);
+                Drawable next = new GrapeBadgeDrawable(null, icon, color,
+                        AndroidUtilities.dp(26), 0, false, alphaValue, particles, animation);
                 if (badge != null) badge.setCallback(null);
                 badge = next;
                 badge.setCallback(this);
