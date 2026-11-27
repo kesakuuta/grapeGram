@@ -182,6 +182,12 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
         reason.setSingleLine(true);
         reason.setHint("Причина (для журнала)");
         layout.addView(reason, new LinearLayout.LayoutParams(-1, -2));
+        EditText style = new EditText(context);
+        style.setHint("Стиль бейджа JSON");
+        style.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        style.setMinLines(3);
+        style.setText("{\n  \"color_light\": \"#7852C8\",\n  \"color_dark\": \"#B18BE8\",\n  \"alpha\": 1.0,\n  \"particles\": false,\n  \"animation\": \"none\"\n}");
+        if (grant) layout.addView(style, new LinearLayout.LayoutParams(-1, -2));
         new AlertDialog.Builder(context)
                 .setTitle(grant ? "Выдать бейдж" : "Отозвать бейдж")
                 .setMessage("Тип бейджа: grapegram, founder, developer или contributor")
@@ -189,22 +195,23 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
                 .setNegativeButton("Отмена", null)
                 .setPositiveButton(grant ? "Выдать" : "Отозвать", (d, w) ->
                         chooseBadge(userId.getText().toString().trim(),
-                                reason.getText().toString().trim(), grant))
+                                reason.getText().toString().trim(), grant,
+                                grant ? style.getText().toString() : ""))
                 .show();
     }
 
-    private void chooseBadge(String userId, String reason, boolean grant) {
+    private void chooseBadge(String userId, String reason, boolean grant, String styleJson) {
         final String[] badges = {"grapegram", "founder", "developer", "contributor"};
         Context context = getParentActivity();
         if (context == null) return;
         new AlertDialog.Builder(context)
                 .setTitle("Выбери тип бейджа")
-                .setItems(badges, (dialog, which) -> submitMutation(userId, reason, grant, badges[which]))
+                .setItems(badges, (dialog, which) -> submitMutation(userId, reason, grant, badges[which], styleJson))
                 .setNegativeButton("Отмена", null)
                 .show();
     }
 
-    private void submitMutation(String userId, String reason, boolean grant, String badge) {
+    private void submitMutation(String userId, String reason, boolean grant, String badge, String styleJson) {
         Context context = getParentActivity();
         if (context == null) return;
         if (!userId.matches("[0-9]{5,20}")) {
@@ -216,12 +223,8 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
             JSONObject body = new JSONObject().put("user_id", userId)
                     .put("badge", badge).put("reason", reason);
             if (grant) {
-                body.put("style", new JSONObject()
-                        .put("color_light", "#7852C8")
-                        .put("color_dark", "#B18BE8")
-                        .put("alpha", 1.0)
-                        .put("particles", false)
-                        .put("animation", "none"));
+                JSONObject style = new JSONObject(styleJson);
+                body.put("style", style);
             }
             String path = grant ? "/admin/grant" : "/admin/revoke";
             runRequest(() -> request(GrapeConfig.badgeService(context), path, session, body), response ->
