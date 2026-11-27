@@ -617,6 +617,16 @@ fn run() -> Result<(), String> {
     )?;
     write_file(&launcher_path, &l)?;
 
+    let app_icons_path = proj.join("src/main/java/app/exteraless/appicons/AppIcons.java");
+    let mut app_icons = read_file(&app_icons_path)?;
+    app_icons = patch_once(
+        &app_icons,
+        "return LauncherIcon.EXTERALESS;",
+        "return LauncherIcon.GRAPE_ORIGINAL;",
+        "default current icon fallback",
+    )?;
+    write_file(&app_icons_path, &app_icons)?;
+
     let mut m = disable_alias(&manifest_before, "org.telegram.messenger.ExteralessIcon")?;
     let aliases = format!(
         "{}{}",
