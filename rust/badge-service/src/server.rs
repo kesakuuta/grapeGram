@@ -149,7 +149,7 @@ impl Server {
             let name = raw_name.rsplit('/').next().unwrap_or("");
             if name.is_empty()
                 || name.contains("..")
-                || !(name.ends_with(".json") || name.ends_with(".sig"))
+                || !(name.ends_with(".json") || name.ends_with(".sig") || name.ends_with(".jsonl"))
             {
                 return Err(ApiError::NotFound);
             }
