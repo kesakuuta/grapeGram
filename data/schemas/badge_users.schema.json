@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/OWNER/grapeGram/main/data/schemas/badge_users.schema.json",
+  "$id": "https://raw.githubusercontent.com/kesakuuta/grapeGram/main/data/schemas/badge_users.schema.json",
   "title": "grapeGram badge assignments",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "updated_at", "badges"],
   "properties": {
-    "version": { "type": "integer", "const": 1 },
+    "version": { "type": "integer", "minimum": 1 },
     "updated_at": { "type": "string", "format": "date-time" },
     "badges": {
       "type": "object",
