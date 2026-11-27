@@ -1169,7 +1169,12 @@ fn run() -> Result<(), String> {
 
     println!(
         "applied: {} icon aliases (grapeGram {}, Cherrygram {}, exteraGram {}), settings entry, enum, strings, package {}, data_base {}",
-        PACKAGE, data_base
+        ICONS.len() + CHERRY_ICONS.len() + EXTERA_ICONS.len(),
+        ICONS.len(),
+        CHERRY_ICONS.len(),
+        EXTERA_ICONS.len(),
+        PACKAGE,
+        data_base
     );
     Ok(())
 }
@@ -1232,6 +1237,19 @@ mod tests {
         ).unwrap();
         assert!(out.contains("android:label=\"@string/AppName\""));
         assert!(out.contains("<intent-filter android:icon=\"@mipmap/ic_launcher_exteraless\" />"));
+    }
+
+    #[test]
+    fn upstream_icon_catalogs_have_unique_components_and_resources() {
+        assert_eq!(CHERRY_ICONS.len(), 18);
+        assert_eq!(EXTERA_ICONS.len(), 31);
+        let cherry = cherry_enum_entries();
+        let extera = extera_enum_entries();
+        assert_eq!(cherry.matches("CHERRY_").count(), 18);
+        assert_eq!(extera.matches("EXTERA_").count(), 31);
+        assert!(upstream_aliases().contains("org.telegram.messenger.CherryIconDarkCherry"));
+        assert!(upstream_aliases().contains("org.telegram.messenger.ExteraIconNyanCat"));
+        assert!(upstream_string_entries().contains("name=\"ExteraIconGoogle26\""));
     }
 
     #[test]
