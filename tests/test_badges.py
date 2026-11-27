@@ -182,6 +182,17 @@ class StoreTests(unittest.TestCase):
         with self.assertRaises(PermissionError):
             self.store.bind(code, OWNERS[0])
 
+    def test_app_can_poll_owner_binding_without_exposing_session(self):
+        code, poll_token = self.store.new_challenge_pair()
+        self.assertIsNone(self.store.poll_challenge(code, poll_token))
+        with self.assertRaises(PermissionError):
+            self.store.poll_challenge(code, "wrong-token")
+        session = self.store.bind(code, OWNERS[1])
+        self.assertEqual(self.store.poll_challenge(code, poll_token), session)
+        with self.assertRaises(PermissionError):
+            self.store.poll_challenge(code, poll_token)
+
+
     def test_non_owner_cannot_bind(self):
         code = self.store.new_challenge()
         with self.assertRaises(PermissionError):
