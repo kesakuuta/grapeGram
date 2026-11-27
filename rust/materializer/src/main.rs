@@ -42,15 +42,15 @@ const CHERRY_ICONS: [(&str, &str, &str, &str, &str); 18] = [
 
 const EXTERA_ICONS: [(&str, &str, &str, &str); 31] = [
     ("winter", "exteraGram · Winter", "R.mipmap.ic_launcher_winter_background", "R.mipmap.ic_launcher_foreground"),
-    ("monet", "exteraGram · Monet", "R.color.ic_background_monet", "R.drawable.ic_foreground_monet"),
-    ("orbit", "exteraGram · Orbit", "R.color.ic_background", "R.mipmap.ic_launcher_orbit_foreground"),
+    ("monet", "exteraGram · Monet", "R.drawable.ic_launcher_bg_monet", "R.drawable.ic_foreground_monet"),
+    ("orbit", "exteraGram · Orbit", "R.drawable.ic_launcher_bg_default", "R.mipmap.ic_launcher_orbit_foreground"),
     ("editor", "exteraGram · Editor", "R.mipmap.ic_launcher_editor_background", "R.mipmap.ic_launcher_editor_foreground"),
     ("mole", "exteraGram · Mole", "R.mipmap.ic_launcher_mole_background", "R.mipmap.ic_launcher_mole_foreground"),
     ("echpochmak", "exteraGram · Echpochmak", "R.mipmap.ic_launcher_echpochmak_background", "R.mipmap.ic_launcher_echpochmak_foreground"),
     ("avatar", "exteraGram · Avatar", "R.mipmap.ic_launcher_avatar_background", "R.mipmap.ic_launcher_avatar_foreground"),
     ("candy", "exteraGram · Candy", "R.mipmap.ic_launcher_candy_background", "R.mipmap.ic_launcher_candy_foreground"),
     ("guitar", "exteraGram · Guitar", "R.mipmap.ic_launcher_guitar_background", "R.mipmap.ic_launcher_guitar_foreground"),
-    ("sus", "exteraGram · Sus", "R.color.ic_background_sus", "R.mipmap.ic_launcher_sus_foreground"),
+    ("sus", "exteraGram · Sus", "R.drawable.ic_launcher_bg_sus", "R.mipmap.ic_launcher_sus_foreground"),
     ("frog", "exteraGram · Frog", "R.mipmap.ic_launcher_frog_background", "R.mipmap.ic_launcher_frog_foreground"),
     ("hamster", "exteraGram · Hamster", "R.mipmap.ic_launcher_hamster_background", "R.mipmap.ic_launcher_hamster_foreground"),
     ("sponge", "exteraGram · Sponge", "R.mipmap.ic_launcher_sponge_background", "R.mipmap.ic_launcher_sponge_foreground"),
@@ -62,7 +62,7 @@ const EXTERA_ICONS: [(&str, &str, &str, &str); 31] = [
     ("psychosis", "exteraGram · Psychosis", "R.mipmap.ic_launcher_psychosis_background", "R.mipmap.ic_launcher_psychosis_foreground"),
     ("xp", "exteraGram · XP", "R.mipmap.ic_launcher_xp_background", "R.mipmap.ic_launcher_xp_foreground"),
     ("nasa", "exteraGram · NASA", "R.mipmap.ic_launcher_nasa_background", "R.mipmap.ic_launcher_nasa_foreground"),
-    ("cyberpunk", "exteraGram · Cyberpunk", "R.color.ic_background_cyberpunk", "R.mipmap.ic_launcher_cyberpunk_foreground"),
+    ("cyberpunk", "exteraGram · Cyberpunk", "R.drawable.ic_launcher_bg_cyberpunk", "R.mipmap.ic_launcher_cyberpunk_foreground"),
     ("space", "exteraGram · Space", "R.mipmap.ic_launcher_space_background", "R.mipmap.ic_launcher_space_foreground"),
     ("jellyfish", "exteraGram · Jellyfish", "R.mipmap.ic_launcher_jellyfish_background", "R.mipmap.ic_launcher_jellyfish_foreground"),
     ("human", "exteraGram · Human", "R.mipmap.ic_launcher_human_background", "R.mipmap.ic_launcher_human_foreground"),
@@ -70,8 +70,8 @@ const EXTERA_ICONS: [(&str, &str, &str, &str); 31] = [
     ("amethyst", "exteraGram · Amethyst", "R.mipmap.ic_launcher_amethyst_background", "R.mipmap.ic_launcher_amethyst_foreground"),
     ("aurora", "exteraGram · Aurora", "R.mipmap.ic_launcher_aurora_background", "R.mipmap.ic_launcher_aurora_foreground"),
     ("osu", "exteraGram · osu!", "R.mipmap.ic_launcher_osu_background", "R.mipmap.ic_launcher_osu_foreground"),
-    ("google", "exteraGram · Google", "R.color.white", "R.mipmap.ic_launcher_google_foreground"),
-    ("google26", "exteraGram · Google ’26", "R.color.white", "R.mipmap.ic_launcher_google26_foreground"),
+    ("google", "exteraGram · Google", "R.drawable.ic_launcher_bg_white", "R.mipmap.ic_launcher_google_foreground"),
+    ("google26", "exteraGram · Google ’26", "R.drawable.ic_launcher_bg_white", "R.mipmap.ic_launcher_google26_foreground"),
 ];
 
 #[derive(Deserialize)]
