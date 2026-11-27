@@ -35,6 +35,8 @@ KEY_DIR = os.path.join(DATA_DIR, "keys")
 
 ALLOWED_BADGES = {"grapegram", "founder", "developer", "contributor"}
 ID_RE = re.compile(r"^[0-9]{5,20}$")
+HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$")
+BADGE_ANIMATIONS = {"none", "pulse", "sparkle", "glow"}
 CHALLENGE_TTL = 300
 SESSION_TTL = 3600
 
@@ -55,6 +57,36 @@ def _write_atomic(path, obj):
         json.dump(obj, f, ensure_ascii=False, indent=2, sort_keys=True)
         f.write("\n")
     os.replace(tmp, path)
+
+def validate_badge_style(style):
+    if style is None:
+        return None
+    if not isinstance(style, dict):
+        raise ValueError("style must be an object")
+    allowed = {"color_light", "color_dark", "alpha", "particles", "animation"}
+    if set(style) - allowed:
+        raise ValueError("unknown style field")
+    clean = {}
+    for key in ("color_light", "color_dark"):
+        if key in style:
+            value = style[key]
+            if not isinstance(value, str) or not HEX_COLOR_RE.fullmatch(value):
+                raise ValueError("invalid " + key + ": expected #RRGGBB or #AARRGGBB")
+            clean[key] = value.upper()
+    if "alpha" in style:
+        value = style["alpha"]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+            raise ValueError("alpha must be between 0 and 1")
+        clean["alpha"] = float(value)
+    if "particles" in style:
+        if not isinstance(style["particles"], bool):
+            raise ValueError("particles must be boolean")
+        clean["particles"] = style["particles"]
+    if "animation" in style:
+        if style["animation"] not in BADGE_ANIMATIONS:
+            raise ValueError("unknown badge animation")
+        clean["animation"] = style["animation"]
+    return clean
 
 
 def _sign(payload: bytes, key_pem: bytes) -> bytes:
@@ -148,7 +180,7 @@ class Store:
         return s["owner"]
 
     def mutate(self, token: str, target: str, badge: str, enabled: bool,
-               reason: str = ""):
+               reason: str = "", style=None):
         owner = self.require_owner(token)
         if not ID_RE.match(str(target)):
             raise ValueError("bad user id")
@@ -161,6 +193,8 @@ class Store:
         entry.update({"badge": badge, "enabled": bool(enabled),
                       "updated_at": now,
                       "record_version": int(entry.get("record_version", 0)) + 1})
+        if style is not None:
+            entry["style"] = validate_badge_style(style)
         if enabled and "granted_at" not in entry:
             entry["granted_at"] = now
         doc["badges"][target] = entry
@@ -175,7 +209,8 @@ class Store:
             f.write(base64.b64encode(sig).decode("ascii") + "\n")
         self._audit({"action": "grant" if enabled else "revoke",
                      "by": owner, "target": target, "badge": badge,
-                     "reason": reason, "version": doc["version"], "at": now})
+                     "reason": reason, "style": entry.get("style", {}),
+                     "version": doc["version"], "at": now})
         return doc
 
     def _audit(self, rec):
@@ -252,7 +287,7 @@ class Handler(BaseHTTPRequestHandler):
                 doc = STORE.mutate(self._auth(), str(body.get("user_id")),
                                    body.get("badge", "grapegram"),
                                    self.path.endswith("grant"),
-                                   body.get("reason", ""))
+                                   body.get("reason", ""), body.get("style"))
                 return self._json(200, {"ok": True, "version": doc["version"]})
             return self._json(404, {"error": "not found"})
         except PermissionError as e:
