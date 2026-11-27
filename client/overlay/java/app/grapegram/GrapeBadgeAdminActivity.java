@@ -62,6 +62,7 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
         addButton(context, root, "Проверить привязку", this::pollBinding);
         addButton(context, root, "Выдать бейдж", () -> mutate(true));
         addButton(context, root, "Отозвать бейдж", () -> mutate(false));
+        addButton(context, root, "Журнал изменений", this::showAudit);
 
         TextView foot = new TextView(context);
         foot.setText("Владельцы: 7293365262 и 960792706\nСессия хранится локально и истекает через час.");
@@ -159,6 +160,58 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
         } catch (Exception e) {
             toast("Ошибка подготовки запроса: " + e.getMessage());
         }
+    }
+
+    private void showAudit() {
+        Context context = getParentActivity();
+        if (context == null) return;
+        String base = GrapeConfig.badgeService(context);
+        if (base.isEmpty()) {
+            toast("Сначала укажи URL badge-service");
+            return;
+        }
+        Utilities.globalQueue.postRunnable(() -> {
+            try {
+                HttpURLConnection connection = (HttpURLConnection) new URL(base + "/data/audit.jsonl").openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(10000);
+                connection.setReadTimeout(15000);
+                connection.setRequestProperty("User-Agent", "grapeGram/" + GrapeConfig.VERSION);
+                String audit;
+                try {
+                    int status = connection.getResponseCode();
+                    if (status == 404) {
+                        audit = "";
+                    } else if (status != 200) {
+                        throw new IllegalStateException("HTTP " + status);
+                    } else {
+                        try (InputStream in = connection.getInputStream();
+                             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                            byte[] buffer = new byte[4096];
+                            int n;
+                            while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
+                            audit = new String(out.toByteArray(), StandardCharsets.UTF_8);
+                        }
+                    }
+                } finally {
+                    connection.disconnect();
+                }
+                final String result = audit;
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (result.trim().isEmpty()) {
+                        showMessage("Журнал пока пуст");
+                        return;
+                    }
+                    String[] lines = result.trim().split("\\n");
+                    StringBuilder last = new StringBuilder();
+                    int start = Math.max(0, lines.length - 30);
+                    for (int i = start; i < lines.length; i++) last.append(lines[i]).append('\\n');
+                    showMessage("Последние " + (lines.length - start) + " записей:\\n\\n" + last);
+                });
+            } catch (Exception e) {
+                AndroidUtilities.runOnUIThread(() -> toast("Журнал: " + e.getMessage()));
+            }
+        });
     }
 
     private void mutate(boolean grant) {
