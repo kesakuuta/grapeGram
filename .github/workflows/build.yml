@@ -1,5 +1,9 @@
 name: build
 
+concurrency:
+  group: grapegram-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
