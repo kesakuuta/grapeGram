@@ -66,6 +66,10 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
         }
     }
 
+    public Drawable getPrimaryDrawable() {
+        return primary;
+    }
+
     public static int colorForBadge(String badge) {
         if ("founder".equals(badge)) {
             return 0xFFE0A52B;
