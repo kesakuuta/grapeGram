@@ -896,38 +896,6 @@ fn run() -> Result<(), String> {
         "req.api_hash = tw.nekomimi.nekogram.NekoXConfig.currentAppHash();", "firebase api hash")?;
     write_file(&firebase_path, &firebase)?;
 
-    let chats_path = proj.join("src/main/java/app/exteraless/settings/OpenExteraChatsActivity.java");
-    let mut chats = read_file(&chats_path)?;
-    chats = patch_once(&chats,
-        "    private int linksHeaderRow = -1;",
-        "    private int appIconRow = -1;\n    private int linksHeaderRow = -1;",
-        "chats icon field")?;
-    chats = patch_once(&chats,
-        "        linksHeaderRow = addRow(\"linksHeader\");",
-        "        appIconRow = addRow();\n        linksHeaderRow = addRow(\"linksHeader\");",
-        "chats icon row")?;
-    chats = patch_once(&chats,
-        "        } else if (position == aiChatRow) {\n            presentFragment(new app.exteraless.ai.ui.AiSettingsActivity());\n            return;\n        }",
-        "        } else if (position == appIconRow) {\n            presentFragment(new app.exteraless.appicons.AppIconsActivity());\n            return;\n        } else if (position == aiChatRow) {\n            presentFragment(new app.exteraless.ai.ui.AiSettingsActivity());\n            return;\n        }",
-        "chats icon click")?;
-    chats = patch_once(&chats,
-        "            } else if (position == aiChatRow) {\n                cell.setTextAndIcon(getString(R.string.OEChatsAiChat), aiChatIcon(), true);",
-        "            } else if (position == appIconRow) {\n                cell.setTextAndIcon(\"Иконка приложения\", appIconIcon(), true);\n                cell.setSubtitle(\"Оригинальная, Аметист, Мозаика и другие\");\n            } else if (position == aiChatRow) {\n                cell.setTextAndIcon(getString(R.string.OEChatsAiChat), aiChatIcon(), true);",
-        "chats icon bind")?;
-    chats = patch_once(&chats,
-        "if (position == inlineMathSettingsRow || position == aiChatRow || position == chatSettingsRow || position == menusRow || position == mediaRow) {",
-        "if (position == inlineMathSettingsRow || position == appIconRow || position == aiChatRow || position == chatSettingsRow || position == menusRow || position == mediaRow) {",
-        "chats icon view type")?;
-    if !chats.contains("private static int appIconIcon()") {
-        let end = chats.rfind('}').ok_or("chats final brace")?;
-        chats.insert_str(end, r#"
-    private static int appIconIcon() {
-        return R.drawable.grape_icon_original;
-    }
-"#);
-    }
-    write_file(&chats_path, &chats)?;
-
     let dialog_cell_path = proj.join("src/main/java/org/telegram/ui/Cells/DialogCell.java");
     let mut dialog_cell = read_file(&dialog_cell_path)?;
     dialog_cell = patch_once(
