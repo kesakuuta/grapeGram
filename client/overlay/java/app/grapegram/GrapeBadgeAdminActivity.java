@@ -1,7 +1,13 @@
 package app.grapegram;
 
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -242,7 +248,24 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
         style.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         style.setMinLines(3);
         style.setText("{\n  \"color_light\": \"#7852C8\",\n  \"color_dark\": \"#B18BE8\",\n  \"alpha\": 1.0,\n  \"particles\": false,\n  \"animation\": \"none\"\n}");
-        if (grant) layout.addView(style, new LinearLayout.LayoutParams(-1, -2));
+        BadgePreviewView preview = new BadgePreviewView(context);
+        preview.setStyle(style.getText().toString());
+        style.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                preview.setStyle(s.toString());
+            }
+            @Override public void afterTextChanged(Editable s) { }
+        });
+        if (grant) {
+            TextView previewLabel = new TextView(context);
+            previewLabel.setText("Предпросмотр бейджа");
+            previewLabel.setTextSize(13);
+            previewLabel.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteGrayText));
+            layout.addView(previewLabel, new LinearLayout.LayoutParams(-1, -2));
+            layout.addView(preview, new LinearLayout.LayoutParams(-1, AndroidUtilities.dp(58)));
+            layout.addView(style, new LinearLayout.LayoutParams(-1, -2));
+        }
         new AlertDialog.Builder(context)
                 .setTitle(grant ? "Выдать бейдж" : "Отозвать бейдж")
                 .setMessage("Тип бейджа: grapegram, founder, developer или contributor")
@@ -290,6 +313,49 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
             });
         } catch (Exception e) {
             toast("Ошибка подготовки запроса: " + e.getMessage());
+        }
+    }
+
+    private static final class BadgePreviewView extends View {
+        private Drawable badge;
+
+        BadgePreviewView(Context context) {
+            super(context);
+            setContentDescription("Предпросмотр бейджа grapeGram");
+        }
+
+        void setStyle(String raw) {
+            try {
+                JSONObject style = new JSONObject(raw);
+                boolean dark = Theme.isCurrentThemeDark();
+                String key = dark ? "color_dark" : "color_light";
+                String fallbackKey = dark ? "color_light" : "color_dark";
+                String colorValue = style.optString(key, style.optString(fallbackKey,
+                        dark ? "#B18BE8" : "#7852C8"));
+                int color = Color.parseColor(colorValue);
+                float alpha = (float) style.optDouble("alpha", 1.0);
+                boolean particles = style.optBoolean("particles", false);
+                String animation = style.optString("animation", "none");
+                Drawable next = new GrapeBadgeDrawable(getContext(), null, color,
+                        alpha, particles, animation, false);
+                if (badge != null) badge.setCallback(null);
+                badge = next;
+                badge.setCallback(this);
+                invalidate();
+            } catch (Exception ignore) {
+                // Keep the last valid preview while the user is editing JSON.
+            }
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            if (badge == null) return;
+            int size = AndroidUtilities.dp(36);
+            int left = (getWidth() - size) / 2;
+            int top = (getHeight() - size) / 2;
+            badge.setBounds(left, top, left + size, top + size);
+            badge.draw(canvas);
         }
     }
 
