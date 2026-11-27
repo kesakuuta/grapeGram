@@ -5,6 +5,7 @@ import android.view.View;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.DialogObject;
+import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
@@ -75,26 +76,14 @@ public class StatusBadgeComponent {
             currentDrawable = new GrapeBadgeDrawable(
                     hasStatus ? statusDrawable : null,
                     icon,
-                    badgeColor(badge.badge),
+                    GrapeBadgeDrawable.colorForBadge(badge.badge),
                     AndroidUtilities.dp(18),
-                    AndroidUtilities.dp(2));
+                    AndroidUtilities.dp(2),
+                    LocaleController.isRTL);
         } else {
             currentDrawable = hasStatus ? statusDrawable : null;
         }
         return currentDrawable;
-    }
-
-    private static int badgeColor(String badge) {
-        if ("founder".equals(badge)) {
-            return 0xFFE0A52B;
-        }
-        if ("developer".equals(badge)) {
-            return 0xFF8757D9;
-        }
-        if ("contributor".equals(badge)) {
-            return 0xFF259F91;
-        }
-        return 0xFF7852C8;
     }
 
     public Drawable getDrawable() {
