@@ -33,6 +33,19 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
         background.setColor(badgeColor);
     }
 
+    public static int colorForBadge(String badge) {
+        if ("founder".equals(badge)) {
+            return 0xFFE0A52B;
+        }
+        if ("developer".equals(badge)) {
+            return 0xFF8757D9;
+        }
+        if ("contributor".equals(badge)) {
+            return 0xFF259F91;
+        }
+        return 0xFF7852C8;
+    }
+
     @Override
     public void draw(Canvas canvas) {
         Rect bounds = getBounds();
