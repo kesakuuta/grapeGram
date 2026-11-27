@@ -1,0 +1,301 @@
+package app.grapegram;
+
+import android.content.Context;
+import android.graphics.Typeface;
+import android.text.InputType;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import org.json.JSONObject;
+import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.R;
+import org.telegram.messenger.Utilities;
+import org.telegram.ui.ActionBar.ActionBar;
+import org.telegram.ui.ActionBar.AlertDialog;
+import org.telegram.ui.ActionBar.BaseFragment;
+import org.telegram.ui.ActionBar.Theme;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+
+/** Owner-only badge controls. The server independently verifies every mutation. */
+public final class GrapeBadgeAdminActivity extends BaseFragment {
+
+    private static final String SESSION_KEY = "badge_admin_session";
+    private static final String PENDING_CODE = "badge_admin_pending_code";
+    private static final String PENDING_POLL = "badge_admin_pending_poll";
+
+    @Override
+    public View createView(Context context) {
+        actionBar.setBackButtonImage(R.drawable.ic_ab_back);
+        actionBar.setTitle("Управление бейджами");
+        actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
+            @Override public void onItemClick(int id) {
+                if (id == -1) finishFragment();
+            }
+        });
+
+        LinearLayout root = new LinearLayout(context);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(AndroidUtilities.dp(20), AndroidUtilities.dp(18),
+                AndroidUtilities.dp(20), AndroidUtilities.dp(20));
+        root.setBackgroundColor(getThemedColor(Theme.key_windowBackgroundGray));
+
+        TextView info = new TextView(context);
+        info.setText("Доступ разрешён только двум владельцам. Сервер повторно проверяет Telegram ID и права при каждой операции.\n\n"
+                + "Сначала укажи URL своего badge-service, затем привяжи аккаунт через Telegram.");
+        info.setTextSize(14);
+        info.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlackText));
+        root.addView(info, new LinearLayout.LayoutParams(-1, -2));
+
+        addButton(context, root, "Адрес badge-service", this::editService);
+        addButton(context, root, "Подключить через Telegram", this::beginBinding);
+        addButton(context, root, "Проверить привязку", this::pollBinding);
+        addButton(context, root, "Выдать бейдж", () -> mutate(true));
+        addButton(context, root, "Отозвать бейдж", () -> mutate(false));
+
+        TextView foot = new TextView(context);
+        foot.setText("Владельцы: 7293365262 и 960792706\nСессия хранится локально и истекает через час.");
+        foot.setTextSize(12);
+        foot.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteGrayText));
+        foot.setPadding(0, AndroidUtilities.dp(14), 0, 0);
+        root.addView(foot, new LinearLayout.LayoutParams(-1, -2));
+
+        fragmentView = root;
+        return root;
+    }
+
+    private void addButton(Context context, LinearLayout root, String title, Runnable action) {
+        Button button = new Button(context);
+        button.setText(title);
+        button.setAllCaps(false);
+        button.setOnClickListener(v -> action.run());
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.topMargin = AndroidUtilities.dp(8);
+        root.addView(button, lp);
+    }
+
+    private void editService() {
+        Context context = getParentActivity();
+        if (context == null) return;
+        EditText input = new EditText(context);
+        input.setSingleLine(true);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        input.setHint("https://badge.example.com");
+        input.setText(GrapeConfig.badgeService(context));
+        new AlertDialog.Builder(context)
+                .setTitle("Адрес badge-service")
+                .setMessage("Нужен развёрнутый HTTPS-сервис grapeGram badge-service.")
+                .setView(input)
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton("Сохранить", (d, w) -> {
+                    String value = input.getText().toString().trim();
+                    if (!value.isEmpty() && !value.startsWith("https://")) {
+                        toast("Используй HTTPS");
+                        return;
+                    }
+                    GrapeConfig.setBadgeService(context, value);
+                    toast("Адрес сохранён");
+                }).show();
+    }
+
+    private void beginBinding() {
+        Context context = getParentActivity();
+        if (context == null) return;
+        if (!GrapeConfig.isBadgeOwner(org.telegram.messenger.UserConfig.getInstance(
+                org.telegram.messenger.UserConfig.selectedAccount).clientUserId)) {
+            toast("Этот аккаунт не является владельцем");
+            return;
+        }
+        String base = GrapeConfig.badgeService(context);
+        if (base.isEmpty()) {
+            toast("Сначала укажи URL badge-service");
+            editService();
+            return;
+        }
+        runRequest(() -> request(base, "/challenge", null, new JSONObject()), response -> {
+            String code = response.optString("code");
+            String poll = response.optString("poll_token");
+            if (code.isEmpty() || poll.isEmpty()) throw new IllegalStateException("Некорректный ответ сервера");
+            GrapeConfig.setString(context, PENDING_CODE, code);
+            GrapeConfig.setString(context, PENDING_POLL, poll);
+            showMessage("Код привязки: " + code + "\n\nОтправь боту команду:\n/bind " + code
+                    + "\n\nПосле ответа бота нажми «Проверить привязку». Код действует 5 минут.");
+        });
+    }
+
+    private void pollBinding() {
+        Context context = getParentActivity();
+        if (context == null) return;
+        String code = GrapeConfig.getString(context, PENDING_CODE, "");
+        String poll = GrapeConfig.getString(context, PENDING_POLL, "");
+        if (code.isEmpty() || poll.isEmpty()) {
+            toast("Сначала начни подключение");
+            return;
+        }
+        try {
+            JSONObject body = new JSONObject().put("code", code).put("poll_token", poll);
+            runRequest(() -> request(GrapeConfig.badgeService(context), "/challenge/status", null, body), response -> {
+                if ("pending".equals(response.optString("status"))) {
+                    toast("Ожидаю подтверждение в Telegram");
+                    return;
+                }
+                String session = response.optString("session");
+                if (session.isEmpty()) throw new IllegalStateException("Сервер не вернул сессию");
+                GrapeConfig.setString(context, SESSION_KEY, session);
+                GrapeConfig.setString(context, PENDING_CODE, "");
+                GrapeConfig.setString(context, PENDING_POLL, "");
+                toast("Владелец подтверждён. Сессия активна 1 час.");
+            });
+        } catch (Exception e) {
+            toast("Ошибка подготовки запроса: " + e.getMessage());
+        }
+    }
+
+    private void mutate(boolean grant) {
+        Context context = getParentActivity();
+        if (context == null) return;
+        String session = GrapeConfig.getString(context, SESSION_KEY, "");
+        if (session.isEmpty()) {
+            toast("Сначала подключи владельца через Telegram");
+            return;
+        }
+        EditText userId = new EditText(context);
+        userId.setSingleLine(true);
+        userId.setInputType(InputType.TYPE_CLASS_NUMBER);
+        userId.setHint("Telegram user ID");
+        LinearLayout layout = new LinearLayout(context);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int pad = AndroidUtilities.dp(18);
+        layout.setPadding(pad, AndroidUtilities.dp(8), pad, 0);
+        layout.addView(userId, new LinearLayout.LayoutParams(-1, -2));
+        EditText reason = new EditText(context);
+        reason.setSingleLine(true);
+        reason.setHint("Причина (для журнала)");
+        layout.addView(reason, new LinearLayout.LayoutParams(-1, -2));
+        new AlertDialog.Builder(context)
+                .setTitle(grant ? "Выдать бейдж" : "Отозвать бейдж")
+                .setMessage("Тип бейджа: grapegram, founder, developer или contributor")
+                .setView(layout)
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton(grant ? "Выдать" : "Отозвать", (d, w) ->
+                        chooseBadge(userId.getText().toString().trim(),
+                                reason.getText().toString().trim(), grant))
+                .show();
+    }
+
+    private void chooseBadge(String userId, String reason, boolean grant) {
+        final String[] badges = {"grapegram", "founder", "developer", "contributor"};
+        Context context = getParentActivity();
+        if (context == null) return;
+        new AlertDialog.Builder(context)
+                .setTitle("Выбери тип бейджа")
+                .setItems(badges, (dialog, which) -> submitMutation(userId, reason, grant, badges[which]))
+                .setNegativeButton("Отмена", null)
+                .show();
+    }
+
+    private void submitMutation(String userId, String reason, boolean grant, String badge) {
+        Context context = getParentActivity();
+        if (context == null) return;
+        if (!userId.matches("[0-9]{5,20}")) {
+            toast("Некорректный Telegram ID");
+            return;
+        }
+        String session = GrapeConfig.getString(context, SESSION_KEY, "");
+        try {
+            JSONObject body = new JSONObject().put("user_id", userId)
+                    .put("badge", badge).put("reason", reason);
+            if (grant) {
+                body.put("style", new JSONObject()
+                        .put("color_light", "#7852C8")
+                        .put("color_dark", "#B18BE8")
+                        .put("alpha", 1.0)
+                        .put("particles", false)
+                        .put("animation", "none"));
+            }
+            String path = grant ? "/admin/grant" : "/admin/revoke";
+            runRequest(() -> request(GrapeConfig.badgeService(context), path, session, body), response ->
+                    toast((grant ? "Бейдж выдан" : "Бейдж отозван")
+                            + ". Версия данных: " + response.optInt("version", -1)));
+        } catch (Exception e) {
+            toast("Ошибка подготовки запроса: " + e.getMessage());
+        }
+    }
+
+    private interface RequestWork { JSONObject run() throws Exception; }
+    private interface RequestDone { void done(JSONObject response) throws Exception; }
+
+    private void runRequest(RequestWork work, RequestDone done) {
+        Context context = getParentActivity();
+        if (context == null) return;
+        Toast.makeText(context, "Запрос…", Toast.LENGTH_SHORT).show();
+        Utilities.globalQueue.postRunnable(() -> {
+            try {
+                JSONObject result = work.run();
+                AndroidUtilities.runOnUIThread(() -> {
+                    try { done.done(result); }
+                    catch (Exception e) { toast("Ошибка: " + e.getMessage()); }
+                });
+            } catch (Exception e) {
+                AndroidUtilities.runOnUIThread(() -> toast("Badge-service: " + e.getMessage()));
+            }
+        });
+    }
+
+    private JSONObject request(String base, String path, String token, JSONObject body) throws Exception {
+        if (base == null || base.isEmpty()) throw new IllegalStateException("URL сервиса не настроен");
+        HttpURLConnection connection = (HttpURLConnection) new URL(base + path).openConnection();
+        connection.setRequestMethod("POST");
+        connection.setConnectTimeout(10000);
+        connection.setReadTimeout(15000);
+        connection.setDoOutput(true);
+        connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+        if (token != null && !token.isEmpty()) connection.setRequestProperty("Authorization", "Bearer " + token);
+        byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
+        connection.setFixedLengthStreamingMode(bytes.length);
+        try {
+            try (OutputStream out = connection.getOutputStream()) { out.write(bytes); }
+            int status = connection.getResponseCode();
+            InputStream stream = status >= 200 && status < 300
+                    ? connection.getInputStream() : connection.getErrorStream();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            if (stream != null) {
+                try (InputStream in = stream) {
+                    byte[] buffer = new byte[4096];
+                    int n;
+                    while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
+                }
+            }
+            String text = new String(out.toByteArray(), StandardCharsets.UTF_8);
+            JSONObject response = new JSONObject(text.isEmpty() ? "{}" : text);
+            if (status < 200 || status >= 300) {
+                throw new IllegalStateException(response.optString("error", "HTTP " + status));
+            }
+            return response;
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    private void showMessage(String message) {
+        Context context = getParentActivity();
+        if (context == null) return;
+        new AlertDialog.Builder(context).setTitle("Привязка владельца")
+                .setMessage(message).setPositiveButton("OK", null).show();
+    }
+
+    private void toast(String message) {
+        Context context = getParentActivity();
+        if (context != null) Toast.makeText(context, message, Toast.LENGTH_LONG).show();
+    }
+}
