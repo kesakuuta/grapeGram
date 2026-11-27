@@ -89,6 +89,14 @@ class DataTests(unittest.TestCase):
             self.assertIsInstance(rec["enabled"], bool)
             self.assertGreaterEqual(rec["record_version"], 1)
 
+    def test_badge_schema_allows_monotonic_versions(self):
+        with open(os.path.join(ROOT, "data", "schemas", "badge_users.schema.json"),
+                  encoding="utf-8") as f:
+            schema = json.load(f)
+        version = schema["properties"]["version"]
+        self.assertEqual(version.get("minimum"), 1)
+        self.assertNotIn("const", version)
+
     def test_canonical_is_order_independent(self):
         a = {"b": 1, "a": {"y": 2, "x": [1, 2]}}
         b = {"a": {"x": [1, 2], "y": 2}, "b": 1}
