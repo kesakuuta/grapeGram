@@ -221,8 +221,8 @@ class Store:
                      "reason": reason, "style": entry.get("style", {}),
                      "version": doc["version"], "at": now})
         # The Android client reads public signed files from GitHub raw URLs.
-        # Publish signature first and JSON second: clients reject the temporary
-        # mismatch, then accept the new pair once both commits have landed.
+        # Publish the signed document and audit log in one Git commit so no
+        # client or data-verification run can observe a mismatched pair.
         doc["_published"] = self._publish_github()
         return doc
 
