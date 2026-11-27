@@ -77,6 +77,8 @@ const EXTERA_ICONS: [(&str, &str, &str, &str); 31] = [
 #[derive(Deserialize)]
 struct Config {
     data_base: String,
+    #[serde(default)]
+    badge_service: String,
 }
 
 struct Args {
@@ -523,6 +525,10 @@ fn run() -> Result<(), String> {
         .ok()
         .filter(|v| !v.is_empty())
         .unwrap_or(cfg.data_base);
+    let badge_service = env::var("GRP_BADGE_SERVICE")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .unwrap_or(cfg.badge_service);
     let client_dir = {
         let parent = config_path.parent().unwrap_or(Path::new(".")).to_path_buf();
         if parent.join("overlay").join("java").is_dir() {
@@ -577,6 +583,7 @@ fn run() -> Result<(), String> {
     };
     let gconf = read_file(&gconf_path)?
         .replace("@DATA_BASE@", &data_base)
+        .replace("@BADGE_SERVICE@", &badge_service)
         .replace("@PUBLIC_KEY_PEM@", &pem.replace('\n', "\\n"));
     write_file(&gconf_path, &gconf)?;
 
