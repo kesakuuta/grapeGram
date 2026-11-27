@@ -961,7 +961,7 @@ fn run() -> Result<(), String> {
     dialog_cell = patch_once(
         &dialog_cell,
         "        drawPremium = false;\n        drawForwardIcon = false;",
-        "        drawPremium = false;\n        grapeBadgeDrawable = null;\n        drawForwardIcon = false;",
+        "        drawPremium = false;\n        if (grapeBadgeDrawable != null) {\n            grapeBadgeDrawable.setCallback(null);\n        }\n        grapeBadgeDrawable = null;\n        drawForwardIcon = false;",
         "dialog cell badge reset",
     )?;
     dialog_cell = patch_once(
@@ -1009,6 +1009,7 @@ fn run() -> Result<(), String> {
                                                 org.telegram.ui.ActionBar.Theme.isCurrentThemeDark() ? grapeBadge.colorDark : grapeBadge.colorLight),
                                         dp(18), dp(2), LocaleController.isRTL,
                                         (int) (grapeBadge.alpha * 255), grapeBadge.particles, grapeBadge.animation);
+                                grapeBadgeDrawable.setCallback(emojiStatusView);
                             }
                         }"#,
         "dialog cell signed badge lookup",
