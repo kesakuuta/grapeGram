@@ -1,0 +1,340 @@
+{
+  "version": 1,
+  "sources": {
+    "Cherrygram": {
+      "repository": "arsLan4k1390/Cherrygram",
+      "commit": "9e1c901e6fbca5a9a346683b91c6d529376f5304"
+    },
+    "exteraGram": {
+      "repository": "exteraSquad/exteraGram",
+      "commit": "b4d852f48f2734a0bee1a74a0939be621612262a"
+    }
+  },
+  "icons": [
+    {
+      "id": "cherry",
+      "name": "Cherrygram · Вишня",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry"
+    },
+    {
+      "id": "dark_cherry",
+      "name": "Cherrygram · Тёмная",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_dark"
+    },
+    {
+      "id": "dark_cherry_bra",
+      "name": "Cherrygram · Тёмная Bra",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_dark_bra"
+    },
+    {
+      "id": "white_cherry",
+      "name": "Cherrygram · Белая",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_white"
+    },
+    {
+      "id": "white_cherry_bra",
+      "name": "Cherrygram · Белая Bra",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_white_bra"
+    },
+    {
+      "id": "laguna_cherry",
+      "name": "Cherrygram · Лагуна",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_laguna"
+    },
+    {
+      "id": "aqua_cherry",
+      "name": "Cherrygram · Аква",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_aqua"
+    },
+    {
+      "id": "green_cherry",
+      "name": "Cherrygram · Зелёная",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_green"
+    },
+    {
+      "id": "lavanda_cherry",
+      "name": "Cherrygram · Лаванда",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_lavanda"
+    },
+    {
+      "id": "violet_sunset_cherry",
+      "name": "Cherrygram · Фиолетовый закат",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_violet_sunset"
+    },
+    {
+      "id": "violet_sunset_cherry_bra",
+      "name": "Cherrygram · Фиолетовый закат Bra",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_violet_sunset_bra"
+    },
+    {
+      "id": "sunset_cherry",
+      "name": "Cherrygram · Закат",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_sunset"
+    },
+    {
+      "id": "sunrise_cherry",
+      "name": "Cherrygram · Восход",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_sunrise"
+    },
+    {
+      "id": "palms_cherry",
+      "name": "Cherrygram · Пальмы",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_palms"
+    },
+    {
+      "id": "palms_cherry_bra",
+      "name": "Cherrygram · Пальмы Bra",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_palms_bra"
+    },
+    {
+      "id": "turbo_cherry",
+      "name": "Cherrygram · Turbo",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_turbo"
+    },
+    {
+      "id": "nox_cherry",
+      "name": "Cherrygram · Nox",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_nox"
+    },
+    {
+      "id": "dark_ny",
+      "name": "Cherrygram · Новогодняя",
+      "source": "Cherrygram",
+      "resource": "icon_launcher_cherry_dark_ny"
+    },
+    {
+      "id": "winter",
+      "name": "exteraGram · Winter",
+      "source": "exteraGram",
+      "resource": "ic_launcher_winter",
+      "author": "exteraGram"
+    },
+    {
+      "id": "monet",
+      "name": "exteraGram · Monet",
+      "source": "exteraGram",
+      "resource": "ic_launcher_monet",
+      "author": "exteraGram"
+    },
+    {
+      "id": "orbit",
+      "name": "exteraGram · Orbit",
+      "source": "exteraGram",
+      "resource": "ic_launcher_orbit",
+      "author": "exteraGram"
+    },
+    {
+      "id": "editor",
+      "name": "exteraGram · Editor",
+      "source": "exteraGram",
+      "resource": "ic_launcher_editor",
+      "author": "exteraGram"
+    },
+    {
+      "id": "mole",
+      "name": "exteraGram · Mole",
+      "source": "exteraGram",
+      "resource": "ic_launcher_mole",
+      "author": "whatwherewhywhen"
+    },
+    {
+      "id": "echpochmak",
+      "name": "exteraGram · Echpochmak",
+      "source": "exteraGram",
+      "resource": "ic_launcher_echpochmak",
+      "author": "whatwherewhywhen"
+    },
+    {
+      "id": "avatar",
+      "name": "exteraGram · Avatar",
+      "source": "exteraGram",
+      "resource": "ic_launcher_avatar",
+      "author": "cIick_cIack"
+    },
+    {
+      "id": "candy",
+      "name": "exteraGram · Candy",
+      "source": "exteraGram",
+      "resource": "ic_launcher_candy",
+      "author": "impulz3"
+    },
+    {
+      "id": "guitar",
+      "name": "exteraGram · Guitar",
+      "source": "exteraGram",
+      "resource": "ic_launcher_guitar",
+      "author": "nekto_nkt"
+    },
+    {
+      "id": "sus",
+      "name": "exteraGram · Sus",
+      "source": "exteraGram",
+      "resource": "ic_launcher_sus",
+      "author": "MilesBlooper"
+    },
+    {
+      "id": "frog",
+      "name": "exteraGram · Frog",
+      "source": "exteraGram",
+      "resource": "ic_launcher_frog",
+      "author": "cIick_cIack"
+    },
+    {
+      "id": "hamster",
+      "name": "exteraGram · Hamster",
+      "source": "exteraGram",
+      "resource": "ic_launcher_hamster",
+      "author": "whatwherewhywhen"
+    },
+    {
+      "id": "sponge",
+      "name": "exteraGram · Sponge",
+      "source": "exteraGram",
+      "resource": "ic_launcher_sponge",
+      "author": "nneeuurr"
+    },
+    {
+      "id": "invincible",
+      "name": "exteraGram · Invincible",
+      "source": "exteraGram",
+      "resource": "ic_launcher_invincible",
+      "author": "exteraGram"
+    },
+    {
+      "id": "flappy",
+      "name": "exteraGram · Flappy",
+      "source": "exteraGram",
+      "resource": "ic_launcher_flappy",
+      "author": "nneeuurr"
+    },
+    {
+      "id": "nyan_cat",
+      "name": "exteraGram · Nyan Cat",
+      "source": "exteraGram",
+      "resource": "ic_launcher_nyan_cat",
+      "author": "n1ksly"
+    },
+    {
+      "id": "ice_age",
+      "name": "exteraGram · Ice Age",
+      "source": "exteraGram",
+      "resource": "ic_launcher_ice_age",
+      "author": "exteraGram"
+    },
+    {
+      "id": "fish",
+      "name": "exteraGram · Fish",
+      "source": "exteraGram",
+      "resource": "ic_launcher_fish",
+      "author": "whatwherewhywhen"
+    },
+    {
+      "id": "psychosis",
+      "name": "exteraGram · Psychosis",
+      "source": "exteraGram",
+      "resource": "ic_launcher_psychosis",
+      "author": "cIick_cIack"
+    },
+    {
+      "id": "xp",
+      "name": "exteraGram · XP",
+      "source": "exteraGram",
+      "resource": "ic_launcher_xp",
+      "author": "weizoqq"
+    },
+    {
+      "id": "nasa",
+      "name": "exteraGram · NASA",
+      "source": "exteraGram",
+      "resource": "ic_launcher_nasa",
+      "author": "cIick_cIack"
+    },
+    {
+      "id": "cyberpunk",
+      "name": "exteraGram · Cyberpunk",
+      "source": "exteraGram",
+      "resource": "ic_launcher_cyberpunk",
+      "author": "exteraGram"
+    },
+    {
+      "id": "space",
+      "name": "exteraGram · Space",
+      "source": "exteraGram",
+      "resource": "ic_launcher_space",
+      "author": "exteraGram"
+    },
+    {
+      "id": "jellyfish",
+      "name": "exteraGram · Jellyfish",
+      "source": "exteraGram",
+      "resource": "ic_launcher_jellyfish",
+      "author": "whatwherewhywhen"
+    },
+    {
+      "id": "human",
+      "name": "exteraGram · Human",
+      "source": "exteraGram",
+      "resource": "ic_launcher_human",
+      "author": "cIick_cIack"
+    },
+    {
+      "id": "sunset",
+      "name": "exteraGram · Sunset",
+      "source": "exteraGram",
+      "resource": "ic_launcher_sunset",
+      "author": "exteraGram"
+    },
+    {
+      "id": "amethyst",
+      "name": "exteraGram · Amethyst",
+      "source": "exteraGram",
+      "resource": "ic_launcher_amethyst",
+      "author": "exteraGram"
+    },
+    {
+      "id": "aurora",
+      "name": "exteraGram · Aurora",
+      "source": "exteraGram",
+      "resource": "ic_launcher_aurora",
+      "author": "exteraGram"
+    },
+    {
+      "id": "osu",
+      "name": "exteraGram · osu!",
+      "source": "exteraGram",
+      "resource": "ic_launcher_osu",
+      "author": "ataeshi"
+    },
+    {
+      "id": "google",
+      "name": "exteraGram · Google",
+      "source": "exteraGram",
+      "resource": "ic_launcher_google",
+      "author": "exteraGram"
+    },
+    {
+      "id": "google26",
+      "name": "exteraGram · Google ’26",
+      "source": "exteraGram",
+      "resource": "ic_launcher_google26",
+      "author": "Slucket"
+    }
+  ]
+}
