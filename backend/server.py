@@ -235,7 +235,7 @@ class Store:
             "User-Agent": "grapeGram-badge-service",
         }
 
-        for name in ("signatures/badge_users.json.sig", "badge_users.json"):
+        for name in ("signatures/badge_users.json.sig", "badge_users.json", "audit.jsonl"):
             with open(os.path.join(self.data_dir, name), "rb") as f:
                 encoded = base64.b64encode(f.read()).decode("ascii")
             endpoint = "https://api.github.com/repos/{}/contents/data/{}".format(
@@ -298,7 +298,7 @@ class Handler(BaseHTTPRequestHandler):
             name = os.path.basename(self.path)
             for folder in ("", "signatures"):
                 p = os.path.join(DATA_DIR, folder, name)
-                if os.path.isfile(p) and name.endswith((".json", ".sig")):
+                if os.path.isfile(p) and name.endswith((".json", ".sig", ".jsonl")):
                     with open(p, "rb") as f:
                         data = f.read()
                     self.send_response(200)
