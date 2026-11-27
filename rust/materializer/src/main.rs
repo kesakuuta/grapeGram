@@ -1005,8 +1005,10 @@ fn run() -> Result<(), String> {
                                 grapeBadgeDrawable = new app.grapegram.GrapeBadgeDrawable(
                                         (emojiStatusId != null || userPremium) ? emojiStatus : null,
                                         grapeIcon,
-                                        app.grapegram.GrapeBadgeDrawable.colorForBadge(grapeBadge.badge),
-                                        dp(18), dp(2), LocaleController.isRTL);
+                                        app.grapegram.GrapeBadgeDrawable.colorForBadge(grapeBadge.badge,
+                                                org.telegram.ui.ActionBar.Theme.isCurrentThemeDark() ? grapeBadge.colorDark : grapeBadge.colorLight),
+                                        dp(18), dp(2), LocaleController.isRTL,
+                                        (int) (grapeBadge.alpha * 255), grapeBadge.particles, grapeBadge.animation);
                             }
                         }"#,
         "dialog cell signed badge lookup",
@@ -1110,7 +1112,10 @@ fn run() -> Result<(), String> {
             android.graphics.drawable.Drawable grapeIcon = getContext().getDrawable(R.drawable.grape_icon_original);
             nameTextView.setRightDrawable2(new app.grapegram.GrapeBadgeDrawable(
                     null, grapeIcon,
-                    app.grapegram.GrapeBadgeDrawable.colorForBadge(grapeBadge.badge), dp(14), 0));
+                    app.grapegram.GrapeBadgeDrawable.colorForBadge(grapeBadge.badge,
+                            org.telegram.ui.ActionBar.Theme.isCurrentThemeDark() ? grapeBadge.colorDark : grapeBadge.colorLight),
+                    dp(14), 0, false, (int) (grapeBadge.alpha * 255),
+                    grapeBadge.particles, grapeBadge.animation));
         } else {
             nameTextView.setRightDrawable2(null);
         }
