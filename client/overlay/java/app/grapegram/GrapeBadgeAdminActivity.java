@@ -202,11 +202,11 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
                         showMessage("Журнал пока пуст");
                         return;
                     }
-                    String[] lines = result.trim().split("\\n");
+                    String[] lines = result.trim().split("\n");
                     StringBuilder last = new StringBuilder();
                     int start = Math.max(0, lines.length - 30);
-                    for (int i = start; i < lines.length; i++) last.append(lines[i]).append('\\n');
-                    showMessage("Последние " + (lines.length - start) + " записей:\\n\\n" + last);
+                    for (int i = start; i < lines.length; i++) last.append(lines[i]).append('\n');
+                    showMessage("Последние " + (lines.length - start) + " записей:\n\n" + last);
                 });
             } catch (Exception e) {
                 AndroidUtilities.runOnUIThread(() -> toast("Журнал: " + e.getMessage()));
