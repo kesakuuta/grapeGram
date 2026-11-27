@@ -232,6 +232,39 @@ class StoreTests(unittest.TestCase):
         doc = self.store.mutate(token, OWNERS[0], "grapegram", False, "revoked")
         self.assertFalse(doc["badges"][OWNERS[0]]["enabled"])
 
+    def test_badge_style_is_validated_persisted_and_audited(self):
+        code = self.store.new_challenge()
+        token = self.store.bind(code, OWNERS[0])
+        style = {
+            "color_light": "#AA22CC",
+            "color_dark": "#FF112233",
+            "alpha": 0.75,
+            "particles": True,
+            "animation": "sparkle",
+        }
+        doc = self.store.mutate(token, "555555555", "founder", True,
+                                "style test", style=style)
+        self.assertEqual(doc["badges"]["555555555"]["style"], {
+            "color_light": "#AA22CC",
+            "color_dark": "#FF112233",
+            "alpha": 0.75,
+            "particles": True,
+            "animation": "sparkle",
+        })
+        with open(os.path.join(self.data, "audit.jsonl"), encoding="utf-8") as f:
+            rec = json.loads(f.readline())
+        self.assertEqual(rec["style"]["animation"], "sparkle")
+
+    def test_invalid_badge_style_rejected(self):
+        with self.assertRaises(ValueError):
+            server.validate_badge_style({"color_light": "purple"})
+        with self.assertRaises(ValueError):
+            server.validate_badge_style({"alpha": 1.5})
+        with self.assertRaises(ValueError):
+            server.validate_badge_style({"animation": "explode"})
+        with self.assertRaises(ValueError):
+            server.validate_badge_style({"particles": "yes"})
+
     def test_bad_badge_rejected(self):
         code = self.store.new_challenge()
         token = self.store.bind(code, OWNERS[0])
