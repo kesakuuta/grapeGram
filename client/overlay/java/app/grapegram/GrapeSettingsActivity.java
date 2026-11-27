@@ -159,11 +159,17 @@ public class GrapeSettingsActivity extends BaseFragment {
                 if (sb.length() == 0) {
                     sb.append("Пока никому не выданы");
                 }
-                new AlertDialog.Builder(context)
+                AlertDialog.Builder builder = new AlertDialog.Builder(context)
                         .setTitle("Бейджи · v" + result.version)
                         .setMessage(sb.toString().trim())
-                        .setPositiveButton(LocaleController.getString(R.string.OK), null)
-                        .show();
+                        .setPositiveButton(LocaleController.getString(R.string.OK), null);
+                long currentUserId = org.telegram.messenger.UserConfig.getInstance(
+                        org.telegram.messenger.UserConfig.selectedAccount).clientUserId;
+                if (GrapeConfig.isBadgeOwner(currentUserId)) {
+                    builder.setNeutralButton("Управление", (dialog, which) ->
+                            presentFragment(new GrapeBadgeAdminActivity()));
+                }
+                builder.show();
             });
         });
     }
