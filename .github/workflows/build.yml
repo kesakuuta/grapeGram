@@ -201,7 +201,12 @@ jobs:
           count = 0
           for pattern in patterns:
               for path in glob.glob(pattern, recursive=True):
-                  dst = os.path.join(out, 'grapeGram-' + os.path.basename(path))
+                  base = os.path.basename(path)
+                  if base.endswith('.aab'):
+                      base = 'grapeGram-release.aab'
+                  elif not base.startswith('grapeGram'):
+                      base = 'grapeGram-' + base
+                  dst = os.path.join(out, base)
                   shutil.copy2(path, dst)
                   print('artifact:', os.path.basename(dst))
                   count += 1

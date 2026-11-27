@@ -558,6 +558,12 @@ fn run() -> Result<(), String> {
     )?;
     build = patch_once(&build, "            version '3.11'", "            version = '3.11'", "chaquopy version assignment")?;
     build = patch_once(&build, "        aidl true", "        aidl = true", "aidl assignment")?;
+    build = patch_once(
+        &build,
+        "            String gramName = 'exteraless'",
+        "            String gramName = 'grapeGram'",
+        "apk file name",
+    )?;
     write_file(&build_path, &build)?;
 
     let settings_root = args.root.join("settings.gradle");
