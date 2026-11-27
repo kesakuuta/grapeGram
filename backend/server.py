@@ -42,6 +42,7 @@ HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$")
 BADGE_ANIMATIONS = {"none", "pulse", "sparkle", "glow"}
 CHALLENGE_TTL = 300
 SESSION_TTL = 3600
+MAX_BODY = 1_048_576
 
 
 def canonical_bytes(obj) -> bytes:
@@ -323,6 +324,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _body(self):
         n = int(self.headers.get("Content-Length", "0"))
+        if n < 0 or n > MAX_BODY:
+            raise ValueError("request body is too large")
         return json.loads(self.rfile.read(n) or b"{}")
 
     def _auth(self):
