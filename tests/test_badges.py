@@ -169,6 +169,12 @@ class StoreTests(unittest.TestCase):
         os.makedirs(self.data)
         for n in ("badge_users.json", "owner_users.json"):
             shutil.copy(os.path.join(ROOT, "data", n), self.data)
+        os.makedirs(os.path.join(self.data, "signatures"), exist_ok=True)
+        shutil.copy(os.path.join(ROOT, "data", "signatures", "owner_users.json.sig"),
+                    os.path.join(self.data, "signatures", "owner_users.json.sig"))
+        os.makedirs(os.path.join(self.data, "keys"), exist_ok=True)
+        shutil.copy(os.path.join(ROOT, "data", "keys", "grapegram_ed25519.pub.pem"),
+                    os.path.join(self.data, "keys", "grapegram_ed25519.pub.pem"))
         self.priv, self.pub = make_key(self.tmp)
         os.environ["GRP_SIGNING_KEY_FILE"] = self.priv
         self.store = server.Store(self.data)
