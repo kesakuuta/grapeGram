@@ -243,7 +243,7 @@ public final class GrapeBadges {
                     JSONObject rec = badges.optJSONObject(uid);
                     if (rec != null) {
                         list.add(new Entry(uid, rec.optString("badge", "grapegram"),
-                                rec.optBoolean("enabled", false)));
+                                rec.optBoolean("enabled", false), rec.optJSONObject("style")));
                     }
                 }
             }
