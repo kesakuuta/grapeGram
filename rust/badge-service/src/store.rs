@@ -66,6 +66,56 @@ fn id_is_valid(id: &str) -> bool {
     (5..=20).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_digit())
 }
 
+fn validate_style(style: &Value) -> Result<Value, ApiError> {
+    let object = style
+        .as_object()
+        .ok_or_else(|| bad_request("style must be an object"))?;
+    let mut clean = serde_json::Map::new();
+    for (key, value) in object {
+        match key.as_str() {
+            "color_light" | "color_dark" => {
+                let color = value
+                    .as_str()
+                    .ok_or_else(|| bad_request("badge color must be a string"))?;
+                let bytes = color.as_bytes();
+                if (bytes.len() != 7 && bytes.len() != 9)
+                    || bytes.first() != Some(&b'#')
+                    || !bytes[1..].iter().all(u8::is_ascii_hexdigit)
+                {
+                    return Err(bad_request("invalid badge color: expected #RRGGBB or #AARRGGBB"));
+                }
+                clean.insert(key.clone(), Value::String(color.to_ascii_uppercase()));
+            }
+            "alpha" => {
+                let alpha = value
+                    .as_f64()
+                    .ok_or_else(|| bad_request("alpha must be a number between 0 and 1"))?;
+                if !(0.0..=1.0).contains(&alpha) {
+                    return Err(bad_request("alpha must be a number between 0 and 1"));
+                }
+                clean.insert(key.clone(), json!(alpha));
+            }
+            "particles" => {
+                let particles = value
+                    .as_bool()
+                    .ok_or_else(|| bad_request("particles must be boolean"))?;
+                clean.insert(key.clone(), Value::Bool(particles));
+            }
+            "animation" => {
+                let animation = value
+                    .as_str()
+                    .ok_or_else(|| bad_request("animation must be a string"))?;
+                if !["none", "pulse", "sparkle", "glow"].contains(&animation) {
+                    return Err(bad_request("unknown badge animation"));
+                }
+                clean.insert(key.clone(), Value::String(animation.to_string()));
+            }
+            _ => return Err(bad_request("unknown badge style field")),
+        }
+    }
+    Ok(Value::Object(clean))
+}
+
 fn timestamp() -> String {
     let seconds = now_seconds() as i64;
     let days = seconds.div_euclid(86_400);
@@ -212,6 +262,7 @@ impl Store {
         badge: &str,
         enabled: bool,
         reason: &str,
+        style: Option<&Value>,
     ) -> Result<u64, ApiError> {
         let owner = self.require_owner(token)?;
         if !id_is_valid(target) {
@@ -246,6 +297,10 @@ impl Store {
         if enabled && !entry_object.contains_key("granted_at") {
             entry_object.insert("granted_at".to_string(), Value::String(now.clone()));
         }
+        if let Some(style) = style {
+            entry_object.insert("style".to_string(), validate_style(style)?);
+        }
+        let style_record = entry_object.get("style").cloned().unwrap_or_else(|| json!({}));
         badges
             .as_object_mut()
             .ok_or_else(|| internal("badges is not an object"))?
@@ -274,6 +329,7 @@ impl Store {
             "target": target,
             "badge": badge,
             "reason": reason,
+            "style": style_record,
             "version": version,
             "at": now
         }))?;
