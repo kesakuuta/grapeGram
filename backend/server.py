@@ -303,6 +303,41 @@ class Store:
                 if os.path.exists(temp_path):
                     os.unlink(temp_path)
 
+    def read_audit(self):
+        with self.mutation_lock:
+            local_path = os.path.join(self.data_dir, "audit.jsonl")
+            local = open(local_path, "rb").read() if os.path.isfile(local_path) else b""
+            token = os.environ.get("GRP_GITHUB_TOKEN", "").strip()
+            repo = os.environ.get("GRP_GITHUB_REPO", "").strip()
+            if not token or not repo:
+                return local
+            branch = os.environ.get("GRP_GITHUB_BRANCH", "main").strip() or "main"
+            endpoint = "https://api.github.com/repos/{}/contents/data/audit.jsonl".format(repo)
+            request = Request(endpoint + "?ref=" + quote(branch, safe=""),
+                              headers={
+                                  "Accept": "application/vnd.github+json",
+                                  "Authorization": "Bearer " + token,
+                                  "X-GitHub-Api-Version": "2022-11-28",
+                                  "User-Agent": "grapeGram-badge-service",
+                              }, method="GET")
+            try:
+                with urlopen(request, timeout=30) as response:
+                    document = json.loads(response.read().decode("utf-8"))
+                remote = base64.b64decode(document.get("content", ""))
+            except HTTPError as error:
+                if error.code == 404:
+                    return local
+                raise
+            remote_lines = remote.splitlines()
+            known = set(remote_lines)
+            merged = remote_lines + [
+                line for line in local.splitlines() if line and line not in known
+            ]
+            data = b"\\n".join(merged) + (b"\\n" if merged else b"")
+            with open(local_path, "wb") as f:
+                f.write(data)
+            return data
+
     def _publish_github(self):
         token = os.environ.get("GRP_GITHUB_TOKEN", "").strip()
         repo = os.environ.get("GRP_GITHUB_REPO", "").strip()
@@ -413,6 +448,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"ok": True})
         if self.path.startswith("/data/"):
             name = os.path.basename(self.path)
+            if name == "audit.jsonl":
+                data = STORE.read_audit()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
             for folder in ("", "signatures"):
                 p = os.path.join(DATA_DIR, folder, name)
                 if os.path.isfile(p) and name.endswith((".json", ".sig", ".jsonl")):
