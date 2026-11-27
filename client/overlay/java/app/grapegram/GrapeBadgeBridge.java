@@ -4,16 +4,18 @@ import android.content.Context;
 
 import com.exteragram.messenger.api.dto.BadgeDTO;
 import com.exteragram.messenger.api.model.ProfileStatus;
+import com.exteragram.messenger.badges.BadgesController;
 import com.exteragram.messenger.badges.source.ApiBadgeSource;
 import com.exteragram.messenger.badges.source.BadgeInfo;
-import com.exteragram.messenger.badges.BadgesController;
 
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.UserConfig;
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /** Feeds the verified grapeGram list into the badge engine already present in exteraless. */
@@ -25,10 +27,11 @@ public final class GrapeBadgeBridge {
     private static final long CONTRIBUTOR = 5393391313502609448L;
 
     /*
-     * Track only entries owned by grapeGram. Never clear ApiBadgeSource wholesale:
-     * other integrations may also have populated it.
+     * Keep ownership bookkeeping so a revoke restores a value that existed
+     * before grapeGram instead of deleting another integration's badge.
      */
-    private static final Set<Long> APPLIED_IDS = new HashSet<>();
+    private static final Map<Long, BadgeInfo> APPLIED = new HashMap<>();
+    private static final Map<Long, BadgeInfo> PREVIOUS = new HashMap<>();
 
     private GrapeBadgeBridge() {
     }
@@ -63,19 +66,27 @@ public final class GrapeBadgeBridge {
             }
 
             long documentId = documentId(entry.badge);
-            source.put(id, new BadgeInfo(new BadgeDTO(documentId, "grapeGram"),
-                    ProfileStatus.SUPPORTER, false));
+            BadgeInfo next = new BadgeInfo(new BadgeDTO(documentId, "grapeGram"),
+                    ProfileStatus.SUPPORTER, false);
+
+            if (!APPLIED.containsKey(id)) {
+                PREVIOUS.put(id, source.getInfo(id));
+            }
+            source.put(id, next);
+            APPLIED.put(id, next);
             nextIds.add(id);
         }
 
-        // Revoke stale entries previously installed by this bridge only.
-        for (Long oldId : APPLIED_IDS) {
+        // Revoke only our own current value; restore the previous provider value if any.
+        for (Long oldId : new HashSet<>(APPLIED.keySet())) {
             if (!nextIds.contains(oldId)) {
-                source.put(oldId, null);
+                if (APPLIED.get(oldId).equals(source.getInfo(oldId))) {
+                    source.put(oldId, PREVIOUS.get(oldId));
+                }
+                APPLIED.remove(oldId);
+                PREVIOUS.remove(oldId);
             }
         }
-        APPLIED_IDS.clear();
-        APPLIED_IDS.addAll(nextIds);
 
         NotificationCenter.getInstance(UserConfig.selectedAccount).postNotificationName(
                 NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_EMOJI_STATUS);
