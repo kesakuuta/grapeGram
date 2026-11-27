@@ -472,7 +472,7 @@ fn run() -> Result<(), String> {
             text = updated;
         }
         let (updated, n) = set_xml_string(&text, "Page1Message",
-            "The world's **fastest** messaging app. It is free and secure.");
+            "The world\\'s **fastest** messaging app. It is free and secure.");
         if n > 0 {
             text = updated;
         }
