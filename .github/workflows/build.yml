@@ -22,6 +22,18 @@ on:
       - "scripts/**"
       - "render.yaml"
   pull_request:
+    paths-ignore:
+      - "data/badge_users.json"
+      - "data/owner_users.json"
+      - "data/signatures/badge_users.json.sig"
+      - "data/signatures/owner_users.json.sig"
+      - "data/audit.jsonl"
+      - "data/schemas/**"
+      - "backend/**"
+      - "docs/**"
+      - "tests/**"
+      - "scripts/**"
+      - "render.yaml"
   workflow_dispatch:
 
 jobs:
