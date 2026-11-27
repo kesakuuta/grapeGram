@@ -27,6 +27,9 @@ import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.error import HTTPError
+from urllib.parse import quote
+from urllib.request import Request, urlopen
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(ROOT, "data")
@@ -211,7 +214,55 @@ class Store:
                      "by": owner, "target": target, "badge": badge,
                      "reason": reason, "style": entry.get("style", {}),
                      "version": doc["version"], "at": now})
+        # The Android client reads public signed files from GitHub raw URLs.
+        # Publish signature first and JSON second: clients reject the temporary
+        # mismatch, then accept the new pair once both commits have landed.
+        doc["_published"] = self._publish_github()
         return doc
+
+    def _publish_github(self):
+        token = os.environ.get("GRP_GITHUB_TOKEN", "").strip()
+        repo = os.environ.get("GRP_GITHUB_REPO", "").strip()
+        if not token or not repo:
+            return False
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+            raise ValueError("invalid GRP_GITHUB_REPO")
+        branch = os.environ.get("GRP_GITHUB_BRANCH", "main").strip() or "main"
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": "Bearer " + token,
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "grapeGram-badge-service",
+        }
+
+        for name in ("signatures/badge_users.json.sig", "badge_users.json"):
+            with open(os.path.join(self.data_dir, name), "rb") as f:
+                encoded = base64.b64encode(f.read()).decode("ascii")
+            endpoint = "https://api.github.com/repos/{}/contents/data/{}".format(
+                repo, quote(name, safe="/"))
+            sha = None
+            try:
+                request = Request(endpoint + "?ref=" + quote(branch, safe=""),
+                                  headers=headers, method="GET")
+                with urlopen(request, timeout=20) as response:
+                    sha = json.loads(response.read().decode("utf-8")).get("sha")
+            except HTTPError as error:
+                if error.code != 404:
+                    raise
+            payload = {
+                "message": "badge service: publish signed badge assignments",
+                "content": encoded,
+                "branch": branch,
+            }
+            if sha:
+                payload["sha"] = sha
+            request = Request(endpoint, data=json.dumps(payload).encode("utf-8"),
+                              headers={**headers, "Content-Type": "application/json"},
+                              method="PUT")
+            with urlopen(request, timeout=30) as response:
+                if response.status not in (200, 201):
+                    raise RuntimeError("GitHub rejected badge publication")
+        return True
 
     def _audit(self, rec):
         with open(self.audit_path, "a", encoding="utf-8") as f:
@@ -288,7 +339,8 @@ class Handler(BaseHTTPRequestHandler):
                                    body.get("badge", "grapegram"),
                                    self.path.endswith("grant"),
                                    body.get("reason", ""), body.get("style"))
-                return self._json(200, {"ok": True, "version": doc["version"]})
+                return self._json(200, {"ok": True, "version": doc["version"],
+                                        "published": bool(doc.pop("_published", False))})
             return self._json(404, {"error": "not found"})
         except PermissionError as e:
             return self._json(403, {"error": str(e)})
