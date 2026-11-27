@@ -161,7 +161,7 @@ public class GrapeSettingsActivity extends BaseFragment {
                     }
                     return;
                 }
-                GrapeBadgeBridge.syncAsync(context.getApplicationContext());
+                GrapeBadgeBridge.sync(context.getApplicationContext(), result);
                 StringBuilder sb = new StringBuilder();
                 for (GrapeBadges.Entry e : result.entries) {
                     if (e.enabled) {
