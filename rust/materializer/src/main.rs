@@ -234,11 +234,16 @@ fn expect_count(text: &str, needle: &str, expected: usize, what: &str) -> Result
 }
 
 fn camel(key: &str) -> String {
-    let mut chars = key.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-        None => String::new(),
-    }
+    key.split('_')
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<String>()
 }
 
 fn disable_alias(text: &str, alias: &str) -> Result<String, String> {
@@ -412,6 +417,96 @@ fn enum_entries() -> String {
         })
         .collect::<Vec<_>>()
         .join(",\n")
+}
+
+fn upstream_alias_template(prefix: &str, key: &str, resource: &str) -> String {
+    format!(
+        r#"        <activity-alias
+            android:enabled="false"
+            android:name="org.telegram.messenger.{prefix}{camel}"
+            android:targetActivity="org.telegram.ui.LaunchActivity"
+            android:icon="@mipmap/{resource}"
+            android:roundIcon="@mipmap/{resource}"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+"#,
+        prefix = prefix,
+        camel = camel(key),
+        resource = resource
+    )
+}
+
+fn cherry_enum_entries() -> String {
+    CHERRY_ICONS
+        .iter()
+        .map(|(key, _, background, foreground, _)| {
+            format!(
+                "        CHERRY_{}(\"CherryIcon{}\", {}, {}, R.string.CherryIcon{})",
+                key.to_uppercase(),
+                camel(key),
+                background,
+                foreground,
+                camel(key)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",\n")
+}
+
+fn extera_enum_entries() -> String {
+    EXTERA_ICONS
+        .iter()
+        .map(|(key, _, background, foreground)| {
+            format!(
+                "        EXTERA_{}(\"ExteraIcon{}\", {}, {}, R.string.ExteraIcon{})",
+                key.to_uppercase(),
+                camel(key),
+                background,
+                foreground,
+                camel(key)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",\n")
+}
+
+fn upstream_aliases() -> String {
+    let cherry = CHERRY_ICONS
+        .iter()
+        .map(|(key, _, _, _, resource)| upstream_alias_template("CherryIcon", key, resource))
+        .collect::<String>();
+    let extera = EXTERA_ICONS
+        .iter()
+        .map(|(key, _, _, _)| upstream_alias_template("ExteraIcon", key, &format!("ic_launcher_{}", key)))
+        .collect::<String>();
+    format!("{}{}", cherry, extera)
+}
+
+fn upstream_enum_entries() -> String {
+    format!("{} ,\n{}", cherry_enum_entries(), extera_enum_entries())
+}
+
+fn upstream_string_entries() -> String {
+    let cherry = CHERRY_ICONS
+        .iter()
+        .map(|(key, name, _, _, _)| {
+            format!("    <string name=\"CherryIcon{}\">{}</string>\n", camel(key), name)
+        })
+        .collect::<String>();
+    let extera = EXTERA_ICONS
+        .iter()
+        .map(|(key, name, _, _)| {
+            format!("    <string name=\"ExteraIcon{}\">{}</string>\n", camel(key), name)
+        })
+        .collect::<String>();
+    format!("{}{}", cherry, extera)
 }
 
 fn run() -> Result<(), String> {
