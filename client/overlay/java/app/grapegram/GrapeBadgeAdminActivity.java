@@ -227,9 +227,12 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
                 body.put("style", style);
             }
             String path = grant ? "/admin/grant" : "/admin/revoke";
-            runRequest(() -> request(GrapeConfig.badgeService(context), path, session, body), response ->
-                    toast((grant ? "Бейдж выдан" : "Бейдж отозван")
-                            + ". Версия данных: " + response.optInt("version", -1)));
+            runRequest(() -> request(GrapeConfig.badgeService(context), path, session, body), response -> {
+                boolean published = response.optBoolean("published", false);
+                toast((grant ? "Бейдж выдан" : "Бейдж отозван")
+                        + (published ? " и опубликован" : ", но пока не опубликован: настрой GRP_GITHUB_TOKEN на сервере")
+                        + ". Версия данных: " + response.optInt("version", -1));
+            });
         } catch (Exception e) {
             toast("Ошибка подготовки запроса: " + e.getMessage());
         }
