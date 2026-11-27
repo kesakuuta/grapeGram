@@ -234,6 +234,7 @@ class Store:
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
             raise ValueError("invalid GRP_GITHUB_REPO")
         branch = os.environ.get("GRP_GITHUB_BRANCH", "main").strip() or "main"
+        base = "https://api.github.com/repos/" + repo
         headers = {
             "Accept": "application/vnd.github+json",
             "Authorization": "Bearer " + token,
@@ -241,50 +242,64 @@ class Store:
             "User-Agent": "grapeGram-badge-service",
         }
 
-        for name in ("signatures/badge_users.json.sig", "badge_users.json", "audit.jsonl"):
+        def api(method, path, payload=None):
+            data = None if payload is None else json.dumps(payload).encode("utf-8")
+            request = Request(base + path, data=data,
+                              headers={**headers, "Content-Type": "application/json"},
+                              method=method)
+            with urlopen(request, timeout=30) as response:
+                raw = response.read()
+                return json.loads(raw.decode("utf-8")) if raw else {}
+
+        # Merge the remote audit history first: Render's free container may have
+        # restarted and lost its ephemeral filesystem since the previous grant.
+        audit_path = os.path.join(self.data_dir, "audit.jsonl")
+        local_audit = open(audit_path, "rb").read() if os.path.isfile(audit_path) else b""
+        remote_audit = b""
+        try:
+            audit_doc = api("GET", "/contents/data/audit.jsonl?ref=" + quote(branch, safe=""))
+            remote_audit = base64.b64decode(audit_doc.get("content", ""))
+        except HTTPError as error:
+            if error.code != 404:
+                raise
+        remote_lines = remote_audit.splitlines()
+        known = set(remote_lines)
+        merged_lines = remote_lines + [
+            line for line in local_audit.splitlines() if line and line not in known
+        ]
+        merged_audit = b"\\n".join(merged_lines) + (b"\\n" if merged_lines else b"")
+        with open(audit_path, "wb") as f:
+            f.write(merged_audit)
+
+        # Create one Git commit containing the signature, JSON and audit log.
+        # This avoids transient invalid signature/data pairs and duplicate CI runs.
+        ref = api("GET", "/git/ref/heads/" + quote(branch, safe="/"))
+        parent_sha = ref["object"]["sha"]
+        parent = api("GET", "/git/commits/" + parent_sha)
+        tree_entries = []
+        for name in ("badge_users.json", "signatures/badge_users.json.sig", "audit.jsonl"):
             with open(os.path.join(self.data_dir, name), "rb") as f:
                 encoded = base64.b64encode(f.read()).decode("ascii")
-            endpoint = "https://api.github.com/repos/{}/contents/data/{}".format(
-                repo, quote(name, safe="/"))
-            sha = None
-            remote_doc = None
-            try:
-                request = Request(endpoint + "?ref=" + quote(branch, safe=""),
-                                  headers=headers, method="GET")
-                with urlopen(request, timeout=20) as response:
-                    remote_doc = json.loads(response.read().decode("utf-8"))
-                    sha = remote_doc.get("sha")
-            except HTTPError as error:
-                if error.code != 404:
-                    raise
-
-            local_path = os.path.join(self.data_dir, name)
-            with open(local_path, "rb") as f:
-                local_bytes = f.read()
-            if name == "audit.jsonl" and remote_doc:
-                remote_bytes = base64.b64decode(remote_doc.get("content", ""))
-                remote_lines = remote_bytes.splitlines()
-                known = set(remote_lines)
-                merged_lines = remote_lines + [
-                    line for line in local_bytes.splitlines() if line and line not in known
-                ]
-                local_bytes = b"\n".join(merged_lines) + (b"\n" if merged_lines else b"")
-                with open(local_path, "wb") as f:
-                    f.write(local_bytes)
-            encoded = base64.b64encode(local_bytes).decode("ascii")
-            payload = {
-                "message": "badge service: publish signed badge assignments",
-                "content": encoded,
-                "branch": branch,
-            }
-            if sha:
-                payload["sha"] = sha
-            request = Request(endpoint, data=json.dumps(payload).encode("utf-8"),
-                              headers={**headers, "Content-Type": "application/json"},
-                              method="PUT")
-            with urlopen(request, timeout=30) as response:
-                if response.status not in (200, 201):
-                    raise RuntimeError("GitHub rejected badge publication")
+            blob = api("POST", "/git/blobs", {"content": encoded, "encoding": "base64"})
+            tree_entries.append({
+                "path": "data/" + name,
+                "mode": "100644",
+                "type": "blob",
+                "sha": blob["sha"],
+            })
+        tree = api("POST", "/git/trees", {
+            "base_tree": parent["tree"]["sha"],
+            "tree": tree_entries,
+        })
+        commit = api("POST", "/git/commits", {
+            "message": "badge service: publish signed badge assignments",
+            "tree": tree["sha"],
+            "parents": [parent_sha],
+        })
+        api("PATCH", "/git/refs/heads/" + quote(branch, safe="/"), {
+            "sha": commit["sha"],
+            "force": False,
+        })
         return True
 
     def _audit(self, rec):
