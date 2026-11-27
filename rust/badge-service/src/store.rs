@@ -469,6 +469,45 @@ mod tests {
     }
 
     #[test]
+    fn mutate_validates_and_persists_badge_style() {
+        let (store, directory) = test_store("style");
+        {
+            let mut inner = store.lock().unwrap();
+            inner.sessions.insert(
+                "session".to_string(),
+                Session {
+                    owner: "7293365262".to_string(),
+                    expires: now_seconds() + SESSION_TTL,
+                },
+            );
+        }
+        let style = json!({
+            "color_light": "#AA22CC",
+            "color_dark": "#FF112233",
+            "alpha": 0.75,
+            "particles": true,
+            "animation": "sparkle"
+        });
+        store.mutate("session", "555555555", "founder", true, "style", Some(&style)).unwrap();
+        let doc: Value = serde_json::from_slice(&fs::read(directory.join("badge_users.json")).unwrap()).unwrap();
+        assert_eq!(doc["badges"]["555555555"]["style"]["color_light"], "#AA22CC");
+        assert_eq!(doc["badges"]["555555555"]["style"]["animation"], "sparkle");
+        assert!(matches!(
+            validate_style(&json!({"color_light": "purple"})),
+            Err(ApiError::BadRequest(_))
+        ));
+        assert!(matches!(
+            validate_style(&json!({"alpha": 2.0})),
+            Err(ApiError::BadRequest(_))
+        ));
+        assert!(matches!(
+            validate_style(&json!({"animation": "explode"})),
+            Err(ApiError::BadRequest(_))
+        ));
+        cleanup(&directory);
+    }
+
+    #[test]
     fn mutate_validates_target_and_badge() {
         let (store, directory) = test_store("validation");
         {
@@ -482,15 +521,15 @@ mod tests {
             );
         }
         assert!(matches!(
-            store.mutate("session", "123", "grapegram", true, ""),
+            store.mutate("session", "123", "grapegram", true, "", None),
             Err(ApiError::BadRequest(_))
         ));
         assert!(matches!(
-            store.mutate("session", "1234567", "unknown", true, ""),
+            store.mutate("session", "1234567", "unknown", true, "", None),
             Err(ApiError::BadRequest(_))
         ));
         assert!(matches!(
-            store.mutate("other", "1234567", "grapegram", true, ""),
+            store.mutate("other", "1234567", "grapegram", true, "", None),
             Err(ApiError::Forbidden(_))
         ));
         cleanup(&directory);
