@@ -311,7 +311,14 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
                     catch (Exception e) { toast("Ошибка: " + e.getMessage()); }
                 });
             } catch (Exception e) {
-                AndroidUtilities.runOnUIThread(() -> toast("Badge-service: " + e.getMessage()));
+                String message = e.getMessage();
+                if (message != null && (message.contains("no valid session")
+                        || message.contains("not an owner"))) {
+                    GrapeConfig.setString(context, SESSION_KEY, "");
+                    message = "Сессия владельца истекла или отозвана. Подключись через Telegram заново.";
+                }
+                final String errorMessage = message == null ? "unknown error" : message;
+                AndroidUtilities.runOnUIThread(() -> toast("Badge-service: " + errorMessage));
             }
         });
     }
