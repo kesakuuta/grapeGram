@@ -245,10 +245,16 @@ class Store:
             "User-Agent": "grapeGram-badge-service",
         }
 
+        ref_endpoint = "https://api.github.com/repos/{}/git/ref/heads/{}".format(
+            repo, quote(branch, safe="/"))
+        ref_request = Request(ref_endpoint, headers=headers, method="GET")
+        with urlopen(ref_request, timeout=30) as response:
+            snapshot = json.loads(response.read().decode("utf-8"))["object"]["sha"]
+
         def read_content(name):
             endpoint = "https://api.github.com/repos/{}/contents/data/{}".format(
                 repo, quote(name, safe="/"))
-            request = Request(endpoint + "?ref=" + quote(branch, safe=""),
+            request = Request(endpoint + "?ref=" + quote(snapshot, safe=""),
                               headers=headers, method="GET")
             with urlopen(request, timeout=30) as response:
                 document = json.loads(response.read().decode("utf-8"))
