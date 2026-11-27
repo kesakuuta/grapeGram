@@ -295,6 +295,22 @@ class IconTests(unittest.TestCase):
             prev = line
         return w, h, out
 
+    def test_upstream_icon_catalog_is_complete_and_unique(self):
+        with open(os.path.join(ROOT, "assets", "icons", "upstream_catalog.json"),
+                  encoding="utf-8") as f:
+            catalog = json.load(f)
+        self.assertEqual(len(catalog["icons"]), 49)
+        ids = [(item["source"], item["id"]) for item in catalog["icons"]]
+        self.assertEqual(len(ids), len(set(ids)))
+        names = [item["name"] for item in catalog["icons"]]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertEqual(sum(item["source"] == "Cherrygram" for item in catalog["icons"]), 18)
+        self.assertEqual(sum(item["source"] == "exteraGram" for item in catalog["icons"]), 31)
+        self.assertEqual(catalog["sources"]["Cherrygram"]["commit"],
+                         "9e1c901e6fbca5a9a346683b91c6d529376f5304")
+        self.assertEqual(catalog["sources"]["exteraGram"]["commit"],
+                         "b4d852f48f2734a0bee1a74a0939be621612262a")
+
     def test_nine_icons_named(self):
         with open(os.path.join(ROOT, "assets", "icons", "icons.json")) as f:
             meta = json.load(f)
