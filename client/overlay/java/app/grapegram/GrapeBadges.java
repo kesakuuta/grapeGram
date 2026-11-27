@@ -190,6 +190,9 @@ public final class GrapeBadges {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(10000);
         c.setReadTimeout(15000);
+        c.setUseCaches(false);
+        c.setRequestProperty("Cache-Control", "no-cache");
+        c.setRequestProperty("Pragma", "no-cache");
         c.setRequestProperty("User-Agent", "grapeGram/" + GrapeConfig.VERSION);
         try {
             if (c.getResponseCode() != 200) {
