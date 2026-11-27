@@ -753,14 +753,14 @@ fn run() -> Result<(), String> {
     )?;
     dialog_cell = patch_once(
         &dialog_cell,
-        `        emojiStatusView = new View(context) {
+        r#"        emojiStatusView = new View(context) {
             @Override
             protected void onDraw(@NonNull Canvas canvas) {
                 emojiStatus.setBounds(0, 0, getWidth(), getHeight());
                 emojiStatus.draw(canvas);
             }
-        };`,
-        `        emojiStatusView = new View(context) {
+        };"#,
+        r#"        emojiStatusView = new View(context) {
             @Override
             protected void onDraw(@NonNull Canvas canvas) {
                 if (grapeBadgeDrawable != null) {
@@ -771,7 +771,7 @@ fn run() -> Result<(), String> {
                     emojiStatus.draw(canvas);
                 }
             }
-        };`,
+        };"#,
         "dialog cell badge drawing",
     )?;
     dialog_cell = patch_once(
@@ -788,7 +788,7 @@ fn run() -> Result<(), String> {
     )?;
     dialog_cell = patch_once(
         &dialog_cell,
-        `                        drawPremium = MessagesController.getInstance(currentAccount).isPremiumUser(user) && UserConfig.getInstance(currentAccount).clientUserId != user.id && user.id != 0;
+        r#"                        drawPremium = MessagesController.getInstance(currentAccount).isPremiumUser(user) && UserConfig.getInstance(currentAccount).clientUserId != user.id && user.id != 0;
                         if (drawPremium) {
                             Long emojiStatusId = UserObject.getEmojiStatusDocumentId(user);
                             emojiStatus.center = LocaleController.isRTL;
@@ -801,8 +801,8 @@ fn run() -> Result<(), String> {
                                 emojiStatus.set(PremiumGradient.getInstance().premiumStarDrawableMini, false);
                                 emojiStatus.setParticles(false, false);
                             }
-                        }`,
-        `                        boolean userPremium = MessagesController.getInstance(currentAccount).isPremiumUser(user)
+                        }"#,
+        r#"                        boolean userPremium = MessagesController.getInstance(currentAccount).isPremiumUser(user)
                                 && UserConfig.getInstance(currentAccount).clientUserId != user.id && user.id != 0;
                         app.grapegram.GrapeBadges.Entry grapeBadge = user.id == 0 ? null
                                 : app.grapegram.GrapeBadges.find(getContext(), String.valueOf(user.id));
@@ -830,7 +830,7 @@ fn run() -> Result<(), String> {
                                         app.grapegram.GrapeBadgeDrawable.colorForBadge(grapeBadge.badge),
                                         dp(18), dp(2), LocaleController.isRTL);
                             }
-                        }`,
+                        }"#,
         "dialog cell signed badge lookup",
     )?;
     dialog_cell = patch_once(
@@ -844,14 +844,14 @@ fn run() -> Result<(), String> {
     dialog_cell = dialog_cell.replace("- dp(24));", "- dp(grapeBadgeDrawable != null ? 42 : 24));");
     dialog_cell = patch_once(
         &dialog_cell,
-        `                        emojiStatus.setBounds(
+        r#"                        emojiStatus.setBounds(
                             nameMuteLeft - dp(2),
                             y - dp(4),
                             nameMuteLeft + dp(20),
                             y - dp(4) + dp(22)
                         );
-                        emojiStatus.draw(canvas);`,
-        `                        if (grapeBadgeDrawable != null) {
+                        emojiStatus.draw(canvas);"#,
+        r#"                        if (grapeBadgeDrawable != null) {
                             grapeBadgeDrawable.setBounds(
                                     nameMuteLeft - dp(2), y - dp(4),
                                     nameMuteLeft + dp(40), y - dp(4) + dp(22));
@@ -864,7 +864,7 @@ fn run() -> Result<(), String> {
                                 y - dp(4) + dp(22)
                             );
                             emojiStatus.draw(canvas);
-                        }`,
+                        }"#,
         "dialog cell badge draw in transition",
     )?;
     write_file(&dialog_cell_path, &dialog_cell)?;
@@ -873,12 +873,12 @@ fn run() -> Result<(), String> {
     let mut user_cell = read_file(&user_cell_path)?;
     user_cell = patch_once(
         &user_cell,
-        `        } else {
+        r#"        } else {
             nameTextView.setRightDrawable(null);
             nameTextView.setRightDrawableTopPadding(0);
         }
-        if (currentStatus != null) {`,
-        `        } else {
+        if (currentStatus != null) {"#,
+        r#"        } else {
             nameTextView.setRightDrawable(null);
             nameTextView.setRightDrawableTopPadding(0);
         }
@@ -892,7 +892,7 @@ fn run() -> Result<(), String> {
         } else {
             nameTextView.setRightDrawable2(null);
         }
-        if (currentStatus != null) {`,
+        if (currentStatus != null) {"#,
         "user cell grapeGram badge",
     )?;
     write_file(&user_cell_path, &user_cell)?;
