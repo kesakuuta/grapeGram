@@ -449,7 +449,10 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/data/"):
             name = os.path.basename(self.path)
             if name == "audit.jsonl":
-                data = STORE.read_audit()
+                try:
+                    data = STORE.read_audit()
+                except Exception:
+                    return self._json(502, {"error": "audit log is temporarily unavailable"})
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
                 self.send_header("Content-Length", str(len(data)))
