@@ -38,7 +38,6 @@ public class GrapeSettingsActivity extends BaseFragment {
     private static final int ID_PLUGINS = 5;
     private static final int ID_BADGES = 6;
     private static final int ID_CREDITS = 7;
-    private static final int ID_ABOUT = 8;
 
     private UniversalRecyclerView listView;
 
@@ -97,8 +96,6 @@ public class GrapeSettingsActivity extends BaseFragment {
                 "Бейджи", "подписанный список из GitHub"));
         items.add(row(ID_CREDITS, IconBackgroundColors.ORANGE_DEEP, R.drawable.settings_ask,
                 "Авторы и благодарности", "Cherrygram · exteraGram · exteraless"));
-        items.add(row(ID_ABOUT, IconBackgroundColors.GRAY, R.drawable.msg_info,
-                "О grapeGram", "версия и лицензия"));
     }
 
     private static UItem row(int id, IconBackgroundColors colors, int icon, String title, String subtitle) {
@@ -127,9 +124,6 @@ public class GrapeSettingsActivity extends BaseFragment {
                 break;
             case ID_CREDITS:
                 presentFragment(new GrapeCreditsActivity());
-                break;
-            case ID_ABOUT:
-                showAbout();
                 break;
             default:
                 break;
@@ -172,16 +166,6 @@ public class GrapeSettingsActivity extends BaseFragment {
                         .show();
             });
         });
-    }
-
-    private void showAbout() {
-        new AlertDialog.Builder(getParentActivity())
-                .setTitle("grapeGram " + GrapeConfig.VERSION)
-                .setMessage("Клиент на базе Cherrygram, exteraGram и exteraless.\n"
-                        + "Авторы upstream не поддерживают grapeGram.\n"
-                        + "Лицензия GPL-3.0.")
-                .setPositiveButton(LocaleController.getString(R.string.OK), null)
-                .show();
     }
 
     private void toast(String text) {

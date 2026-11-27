@@ -29,6 +29,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust/materializer
+            rust/badge-tools
+            rust/badge-service
+            rust/badge-jni
       - name: Check materializer
         run: cargo test --release --manifest-path rust/materializer/Cargo.toml
       - name: Check badge tools
@@ -58,6 +65,13 @@ jobs:
         with:
           python-version: "3.11"
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust/materializer
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+          gradle-home-cache-cleanup: true
       - name: Secret scan
         run: |
           python3 - <<'PY'
@@ -129,12 +143,50 @@ jobs:
           echo "release keystore installed (not committed)"
       - name: Chaquopy build python
         run: echo "CHAQUOPY_BUILD_PYTHON=$(command -v python3.11)" >> "$GITHUB_ENV"
-      - name: Debug APK
-        working-directory: ${{ runner.temp }}/base
-        run: ./gradlew :TMessagesProj:assembleDebug --no-daemon --stacktrace --warning-mode=all
       - name: Release APK + AAB (signed)
         working-directory: ${{ runner.temp }}/base
-        run: ./gradlew :TMessagesProj:assembleRelease :TMessagesProj:bundleRelease --no-daemon --warning-mode=all
+        run: |
+          set -o pipefail
+          ./gradlew :TMessagesProj:assembleRelease :TMessagesProj:bundleRelease \
+            --no-daemon --stacktrace --warning-mode=all --build-cache 2>&1 \
+            | tee "$RUNNER_TEMP/gradle.log"
+      - name: Warning report
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os, re
+          log = os.path.join(os.environ['RUNNER_TEMP'], 'gradle.log')
+          if not os.path.exists(log):
+              raise SystemExit(0)
+          text = open(log, 'r', errors='replace').read()
+          groups = {
+              'Groovy DSL deprecations': r"was deprecated.*|deprecated.*Groovy",
+              'Java source/target': r"source value 8|target value 8|source/target",
+              'Kotlin warnings': r"^w: ",
+              'CMake warnings': r"CMake Warning|CMake Deprecation",
+              'C/C++ warnings': r"warning: ",
+              'R8 warnings': r"^Warning:.*R8|R8:",
+          }
+          summary = os.environ.get('GITHUB_STEP_SUMMARY')
+          lines = ['## Gradle warning report', '']
+          for name, pat in groups.items():
+              n = len(re.findall(pat, text, re.MULTILINE))
+              lines.append(f'- **{name}**: {n}')
+          lines.append('')
+          lines.append('Full log uploaded as artifact `gradle-log`.')
+          out = '\n'.join(lines) + '\n'
+          print(out)
+          if summary:
+              with open(summary, 'a') as fh:
+                  fh.write(out)
+          PY
+      - name: Upload gradle log
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: gradle-log
+          path: ${{ runner.temp }}/gradle.log
+          if-no-files-found: warn
       - name: Name artifacts grapeGram
         run: |
           python3 - <<'PY'
@@ -143,8 +195,8 @@ jobs:
           out = os.path.join(temp, 'artifacts')
           os.makedirs(out, exist_ok=True)
           patterns = [
-              os.path.join(temp, 'base/TMessagesProj/build/outputs/apk/**/*.apk'),
-              os.path.join(temp, 'base/TMessagesProj/build/outputs/bundle/**/*.aab'),
+              os.path.join(temp, 'base/TMessagesProj/build/outputs/apk/release/*.apk'),
+              os.path.join(temp, 'base/TMessagesProj/build/outputs/bundle/release/*.aab'),
           ]
           count = 0
           for pattern in patterns:
@@ -153,8 +205,8 @@ jobs:
                   shutil.copy2(path, dst)
                   print('artifact:', os.path.basename(dst))
                   count += 1
-          if count < 3:
-              raise SystemExit('expected debug APK, release APK and AAB, got %d' % count)
+          if count < 2:
+              raise SystemExit('expected release APK and AAB, got %d' % count)
           PY
       - name: Upload artifacts
         uses: actions/upload-artifact@v7.0.2

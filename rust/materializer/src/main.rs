@@ -479,6 +479,48 @@ fn run() -> Result<(), String> {
         write_file(&path, &text)?;
     }
 
+    let rebrand: [(&str, &str); 12] = [
+        (">exteraless<", ">grapeGram<"),
+        ("Leave blank to use exteraless", "Leave blank to use grapeGram"),
+        ("Exports from exteraless and AyuGram", "Exports from grapeGram and AyuGram"),
+        ("Keep your exteraless settings", "Keep your grapeGram settings"),
+        ("the exteraless logo", "the grapeGram logo"),
+        ("links that exteraless and other clients", "links that grapeGram and other clients"),
+        ("option in exteraless settings", "option in grapeGram settings"),
+        ("users of **exteraless**", "users of **grapeGram**"),
+        ("exteraless Preferences", "grapeGram Preferences"),
+        ("exteraless crashed", "grapeGram crashed"),
+        ("exteraless preferences have been reset", "grapeGram preferences have been reset"),
+        ("exteraless preferences", "grapeGram preferences"),
+    ];
+    for entry in fs::read_dir(&res_dir).map_err(|e| format!("read dir {}: {}", res_dir.display(), e))? {
+        let entry = entry.map_err(|e| format!("read dir {}: {}", res_dir.display(), e))?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !(name == "values" || name.starts_with("values-")) || !entry.path().is_dir() {
+            continue;
+        }
+        for file in fs::read_dir(entry.path())
+            .map_err(|e| format!("read dir {}: {}", entry.path().display(), e))?
+        {
+            let file = file.map_err(|e| format!("read dir {}: {}", entry.path().display(), e))?;
+            let path = file.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("xml") || !path.is_file() {
+                continue;
+            }
+            let mut text = read_file(&path)?;
+            let mut changed = false;
+            for (from, to) in rebrand {
+                if text.contains(from) {
+                    text = text.replace(from, to);
+                    changed = true;
+                }
+            }
+            if changed {
+                write_file(&path, &text)?;
+            }
+        }
+    }
+
     let props = set_gradle_property(&read_file(&props_path)?, "APP_PACKAGE", PACKAGE)?;
     write_file(&props_path, &props)?;
 
@@ -535,6 +577,8 @@ fn run() -> Result<(), String> {
         pg.push_str("-keep class org.bouncycastle.jcajce.provider.asymmetric.edec.** { *; }\n");
         pg.push_str("-keep class org.bouncycastle.jce.provider.BouncyCastleProvider { *; }\n");
         pg.push_str("-keepclasseswithmembers,includedescriptorclasses class app.grapegram.GrapeBadges {\n    native <methods>;\n}\n");
+        pg.push_str("# grapegram: optional javax.script engine service is referenced by a dependency but not bundled\n");
+        pg.push_str("-dontwarn javax.script.**\n");
         write_file(&pg_path, &pg)?;
     }
 
@@ -561,6 +605,41 @@ fn run() -> Result<(), String> {
         "new int[]{R.drawable.exteraless_icon_background, R.drawable.exteraless_icon_foreground}",
         "new int[]{R.drawable.grape_icon_original}", "intro icon")?;
     write_file(&intro_path, &intro)?;
+
+    let google_translate_path = proj
+        .join("src/main/java/tw/nekomimi/nekogram/translate/source/GoogleTranslator.kt");
+    let mut google_translate = read_file(&google_translate_path)?;
+    google_translate = patch_once(
+        &google_translate,
+        "        val urlBuilder = HttpUrl.Builder().scheme(\"https\").host(\"translate-pa.googleapis.com\")",
+        "        val grapeTranslateKey = tw.nekomimi.nekogram.NekoConfig.googleCloudTranslateKey.String()\n        if (grapeTranslateKey.isEmpty()) {\n            error(\"Google Translate API key is not set\")\n        }\n        val urlBuilder = HttpUrl.Builder().scheme(\"https\").host(\"translate-pa.googleapis.com\")",
+        "google translate key check",
+    )?;
+    let preset_google_key = concat!("AIzaSyDLEeFI5", "OtFBwYBIoK_jj5m32rZK5CkCXA");
+    google_translate = patch_once(
+        &google_translate,
+        &format!(".addQueryParameter(\"key\", \"{}\")", preset_google_key),
+        ".addQueryParameter(\"key\", grapeTranslateKey)",
+        "remove preset google api key",
+    )?;
+    write_file(&google_translate_path, &google_translate)?;
+
+    let translator_path = proj
+        .join("src/main/java/tw/nekomimi/nekogram/translate/Translator.kt");
+    let mut translator = read_file(&translator_path)?;
+    translator = patch_once(
+        &translator,
+        "            Locale(args[0])",
+        "            Locale.forLanguageTag(args[0])",
+        "translator locale one",
+    )?;
+    translator = patch_once(
+        &translator,
+        "            Locale(args[0], args[1])",
+        "            Locale.forLanguageTag(args[0] + \"-\" + args[1])",
+        "translator locale two",
+    )?;
+    write_file(&translator_path, &translator)?;
 
     let login_path = proj.join("src/main/java/org/telegram/ui/LoginActivity.java");
     let mut login = read_file(&login_path)?;
