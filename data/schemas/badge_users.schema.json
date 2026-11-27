@@ -21,6 +21,17 @@
           "granted_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" },
           "signature": { "type": "string", "maxLength": 512 },
+          "style": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "color_light": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$" },
+              "color_dark": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$" },
+              "alpha": { "type": "number", "minimum": 0, "maximum": 1 },
+              "particles": { "type": "boolean" },
+              "animation": { "type": "string", "enum": ["none", "pulse", "sparkle", "glow"] }
+            }
+          },
           "record_version": { "type": "integer", "minimum": 1 }
         }
       }
