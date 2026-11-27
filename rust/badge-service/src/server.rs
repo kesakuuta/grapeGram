@@ -216,11 +216,10 @@ impl Server {
             _ => None,
         }
         .ok_or_else(|| forbidden("not an owner"))?;
-        let session = self.store.bind(&code, &telegram_id)?;
-        Ok(Response::json(
-            200,
-            &json!({"ok": true, "session": session}),
-        ))
+        self.store.bind(&code, &telegram_id)?;
+        // The app obtains the session through its private poll token.
+        // Never return it in Telegram's webhook response.
+        Ok(Response::json(200, &json!({"ok": true})))
     }
 
     fn admin(&self, request: &Request) -> Result<Response, ApiError> {
