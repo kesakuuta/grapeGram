@@ -59,7 +59,7 @@ public final class GrapeApiGate {
         box.addView(idInput);
         box.addView(hashInput);
 
-        AlertDialog dialog = new AlertDialog.Builder(context)
+        AlertDialog gateDialog = new AlertDialog.Builder(context)
                 .setTitle("grapeGram — API ключи")
                 .setMessage("Введите свои api_id и api_hash с my.telegram.org → API Development Tools. "
                         + "Ключи сохраняются только на этом устройстве. Без них вход невозможен.")
@@ -89,7 +89,7 @@ public final class GrapeApiGate {
                     AppRestartHelper.triggerRebirth(context, new Intent(context, LaunchActivity.class));
                 })
                 .create();
-        dialog.setCanCancel(false);
-        dialog.show();
+        gateDialog.setCanCancel(false);
+        gateDialog.show();
     }
 }
