@@ -1049,6 +1049,16 @@ fn run() -> Result<(), String> {
     )?;
     write_file(&dialog_cell_path, &dialog_cell)?;
 
+    let profile_activity_path = proj.join("src/main/java/org/telegram/ui/ProfileActivity.java");
+    let mut profile_activity = read_file(&profile_activity_path)?;
+    profile_activity = patch_once(
+        &profile_activity,
+        "    private Drawable getBadgeDrawable(BadgeDTO badge, boolean animated) {\n        if (badgeDrawable == null) {",
+        "    private Drawable getBadgeDrawable(BadgeDTO badge, boolean animated) {\n        if (badge != null && \"grapeGram\".equals(badge.getText()) && getDialogId() > 0) {\n            android.content.Context badgeContext = getParentActivity();\n            if (badgeContext != null) {\n                app.grapegram.GrapeBadges.Entry entry = app.grapegram.GrapeBadges.find(badgeContext, String.valueOf(getDialogId()));\n                if (entry != null) {\n                    android.graphics.drawable.Drawable icon = badgeContext.getDrawable(R.drawable.grape_icon_original);\n                    return new app.grapegram.GrapeBadgeDrawable(null, icon,\n                            app.grapegram.GrapeBadgeDrawable.colorForBadge(entry.badge,\n                                    Theme.isCurrentThemeDark() ? entry.colorDark : entry.colorLight),\n                            AndroidUtilities.dp(24), 0, false, (int) (entry.alpha * 255),\n                            entry.particles, entry.animation);\n                }\n            }\n        }\n        if (badgeDrawable == null) {",
+        "profile header grapeGram badge styling",
+    )?;
+    write_file(&profile_activity_path, &profile_activity)?;
+
     let theme_activity_path = proj.join("src/main/java/org/telegram/ui/ThemeActivity.java");
     let mut theme_activity = read_file(&theme_activity_path)?;
     theme_activity = patch_once(
