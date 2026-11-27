@@ -476,6 +476,17 @@ mod tests {
 
     #[test]
     fn mutate_validates_and_persists_badge_style() {
+        let previous_key = env::var("GRP_SIGNING_KEY_PEM").ok();
+        let mut der = vec![
+            0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22,
+            0x04, 0x20,
+        ];
+        der.extend_from_slice(&[0x11u8; 32]);
+        let test_pem = format!(
+            "-----BEGIN PRIVATE KEY-----\\n{}\\n-----END PRIVATE KEY-----",
+            base64::engine::general_purpose::STANDARD.encode(der)
+        );
+        env::set_var("GRP_SIGNING_KEY_PEM", test_pem);
         let (store, directory) = test_store("style");
         {
             let mut inner = store.lock().unwrap();
@@ -511,6 +522,11 @@ mod tests {
             Err(ApiError::BadRequest(_))
         ));
         cleanup(&directory);
+        if let Some(value) = previous_key {
+            env::set_var("GRP_SIGNING_KEY_PEM", value);
+        } else {
+            env::remove_var("GRP_SIGNING_KEY_PEM");
+        }
     }
 
     #[test]
