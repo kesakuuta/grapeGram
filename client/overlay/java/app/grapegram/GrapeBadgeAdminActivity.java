@@ -348,6 +348,18 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
         }
 
         @Override
+        protected void onAttachedToWindow() {
+            super.onAttachedToWindow();
+            if (badge != null) badge.setCallback(this);
+        }
+
+        @Override
+        protected void onDetachedFromWindow() {
+            if (badge != null) badge.setCallback(null);
+            super.onDetachedFromWindow();
+        }
+
+        @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
             if (badge == null) return;
