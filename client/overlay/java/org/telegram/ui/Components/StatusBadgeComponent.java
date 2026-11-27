@@ -76,10 +76,14 @@ public class StatusBadgeComponent {
             currentDrawable = new GrapeBadgeDrawable(
                     hasStatus ? statusDrawable : null,
                     icon,
-                    GrapeBadgeDrawable.colorForBadge(badge.badge),
+                    GrapeBadgeDrawable.colorForBadge(badge.badge,
+                            Theme.isCurrentThemeDark() ? badge.colorDark : badge.colorLight),
                     AndroidUtilities.dp(18),
                     AndroidUtilities.dp(2),
-                    LocaleController.isRTL);
+                    LocaleController.isRTL,
+                    (int) (badge.alpha * 255),
+                    badge.particles,
+                    badge.animation);
         } else {
             currentDrawable = hasStatus ? statusDrawable : null;
         }
