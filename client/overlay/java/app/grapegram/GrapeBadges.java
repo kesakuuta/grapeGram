@@ -32,11 +32,22 @@ public final class GrapeBadges {
         public final String userId;
         public final String badge;
         public final boolean enabled;
+        public final String colorLight;
+        public final String colorDark;
+        public final float alpha;
+        public final boolean particles;
+        public final String animation;
 
-        Entry(String userId, String badge, boolean enabled) {
+        Entry(String userId, String badge, boolean enabled, JSONObject style) {
             this.userId = userId;
             this.badge = badge;
             this.enabled = enabled;
+            this.colorLight = style == null ? null : style.optString("color_light", null);
+            this.colorDark = style == null ? null : style.optString("color_dark", null);
+            double styleAlpha = style == null ? 1.0 : style.optDouble("alpha", 1.0);
+            this.alpha = (float) Math.max(0.0, Math.min(1.0, styleAlpha));
+            this.particles = style != null && style.optBoolean("particles", false);
+            this.animation = style == null ? "none" : style.optString("animation", "none");
         }
     }
 
@@ -133,7 +144,7 @@ public final class GrapeBadges {
                 JSONObject rec = badges.optJSONObject(uid);
                 if (rec != null) {
                     list.add(new Entry(uid, rec.optString("badge", "grapegram"),
-                            rec.optBoolean("enabled", false)));
+                            rec.optBoolean("enabled", false), rec.optJSONObject("style")));
                 }
             }
         }
