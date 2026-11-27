@@ -346,6 +346,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(403, {"error": str(e)})
         except (ValueError, KeyError) as e:
             return self._json(400, {"error": str(e)})
+        except Exception as e:
+            print("badge service request failed:", repr(e), flush=True)
+            return self._json(502, {"error": "badge service operation failed; inspect service logs"})
 
     def log_message(self, fmt, *args):
         pass
