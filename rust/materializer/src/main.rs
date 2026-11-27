@@ -743,6 +743,132 @@ fn run() -> Result<(), String> {
     }
     write_file(&chats_path, &chats)?;
 
+    let dialog_cell_path = proj.join("src/main/java/org/telegram/ui/Cells/DialogCell.java");
+    let mut dialog_cell = read_file(&dialog_cell_path)?;
+    dialog_cell = patch_once(
+        &dialog_cell,
+        "    private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable emojiStatus;",
+        "    private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable emojiStatus;\n    private app.grapegram.GrapeBadgeDrawable grapeBadgeDrawable;",
+        "dialog cell badge field",
+    )?;
+    dialog_cell = patch_once(
+        &dialog_cell,
+        `        emojiStatusView = new View(context) {
+            @Override
+            protected void onDraw(@NonNull Canvas canvas) {
+                emojiStatus.setBounds(0, 0, getWidth(), getHeight());
+                emojiStatus.draw(canvas);
+            }
+        };`,
+        `        emojiStatusView = new View(context) {
+            @Override
+            protected void onDraw(@NonNull Canvas canvas) {
+                if (grapeBadgeDrawable != null) {
+                    grapeBadgeDrawable.setBounds(0, 0, getWidth(), getHeight());
+                    grapeBadgeDrawable.draw(canvas);
+                } else {
+                    emojiStatus.setBounds(0, 0, dp(22), dp(22));
+                    emojiStatus.draw(canvas);
+                }
+            }
+        };`,
+        "dialog cell badge drawing",
+    )?;
+    dialog_cell = patch_once(
+        &dialog_cell,
+        "        emojiStatusView.layout(0, 0, dp(22), dp(22));",
+        "        emojiStatusView.layout(0, 0, dp(42), dp(22));",
+        "dialog cell badge view width",
+    )?;
+    dialog_cell = patch_once(
+        &dialog_cell,
+        "        drawPremium = false;\n        drawForwardIcon = false;",
+        "        drawPremium = false;\n        grapeBadgeDrawable = null;\n        drawForwardIcon = false;",
+        "dialog cell badge reset",
+    )?;
+    dialog_cell = patch_once(
+        &dialog_cell,
+        `                        drawPremium = MessagesController.getInstance(currentAccount).isPremiumUser(user) && UserConfig.getInstance(currentAccount).clientUserId != user.id && user.id != 0;
+                        if (drawPremium) {
+                            Long emojiStatusId = UserObject.getEmojiStatusDocumentId(user);
+                            emojiStatus.center = LocaleController.isRTL;
+                            if (emojiStatusId != null) {
+                                nameLayoutEllipsizeByGradient = true;
+                                emojiStatus.set(emojiStatusId, false);
+                                emojiStatus.setParticles(DialogObject.isEmojiStatusCollectible(user.emoji_status), false);
+                            } else {
+                                nameLayoutEllipsizeByGradient = true;
+                                emojiStatus.set(PremiumGradient.getInstance().premiumStarDrawableMini, false);
+                                emojiStatus.setParticles(false, false);
+                            }
+                        }`,
+        `                        boolean userPremium = MessagesController.getInstance(currentAccount).isPremiumUser(user)
+                                && UserConfig.getInstance(currentAccount).clientUserId != user.id && user.id != 0;
+                        app.grapegram.GrapeBadges.Entry grapeBadge = user.id == 0 ? null
+                                : app.grapegram.GrapeBadges.find(getContext(), String.valueOf(user.id));
+                        drawPremium = userPremium || grapeBadge != null;
+                        if (drawPremium) {
+                            Long emojiStatusId = UserObject.getEmojiStatusDocumentId(user);
+                            emojiStatus.center = LocaleController.isRTL;
+                            if (emojiStatusId != null) {
+                                nameLayoutEllipsizeByGradient = true;
+                                emojiStatus.set(emojiStatusId, false);
+                                emojiStatus.setParticles(DialogObject.isEmojiStatusCollectible(user.emoji_status), false);
+                            } else if (userPremium) {
+                                nameLayoutEllipsizeByGradient = true;
+                                emojiStatus.set(PremiumGradient.getInstance().premiumStarDrawableMini, false);
+                                emojiStatus.setParticles(false, false);
+                            } else {
+                                emojiStatus.set((android.graphics.drawable.Drawable) null, false);
+                                emojiStatus.setParticles(false, false);
+                            }
+                            if (grapeBadge != null) {
+                                android.graphics.drawable.Drawable grapeIcon = getContext().getDrawable(R.drawable.grape_icon_original);
+                                grapeBadgeDrawable = new app.grapegram.GrapeBadgeDrawable(
+                                        (emojiStatusId != null || userPremium) ? emojiStatus : null,
+                                        grapeIcon,
+                                        app.grapegram.GrapeBadgeDrawable.colorForBadge(grapeBadge.badge),
+                                        dp(18), dp(2), LocaleController.isRTL);
+                            }
+                        }`,
+        "dialog cell signed badge lookup",
+    )?;
+    dialog_cell = patch_once(
+        &dialog_cell,
+        "if (drawPremium && emojiStatus.getDrawable() != null) {\n            int w = dp(6 + 24 + 6);",
+        "if (drawPremium && (emojiStatus.getDrawable() != null || grapeBadgeDrawable != null)) {\n            int w = dp(6 + (grapeBadgeDrawable != null ? 42 : 24) + 6);",
+        "dialog cell badge reserve width",
+    )?;
+    dialog_cell = dialog_cell.replace("w += dp(6 + 24 + 6);", "w += dp(6 + (grapeBadgeDrawable != null ? 42 : 24) + 6);");
+    dialog_cell = dialog_cell.replace("int w = dp(6 + 24 + 6);", "int w = dp(6 + (grapeBadgeDrawable != null ? 42 : 24) + 6);");
+    dialog_cell = dialog_cell.replace("- dp(24));", "- dp(grapeBadgeDrawable != null ? 42 : 24));");
+    dialog_cell = patch_once(
+        &dialog_cell,
+        `                        emojiStatus.setBounds(
+                            nameMuteLeft - dp(2),
+                            y - dp(4),
+                            nameMuteLeft + dp(20),
+                            y - dp(4) + dp(22)
+                        );
+                        emojiStatus.draw(canvas);`,
+        `                        if (grapeBadgeDrawable != null) {
+                            grapeBadgeDrawable.setBounds(
+                                    nameMuteLeft - dp(2), y - dp(4),
+                                    nameMuteLeft + dp(40), y - dp(4) + dp(22));
+                            grapeBadgeDrawable.draw(canvas);
+                        } else {
+                            emojiStatus.setBounds(
+                                nameMuteLeft - dp(2),
+                                y - dp(4),
+                                nameMuteLeft + dp(20),
+                                y - dp(4) + dp(22)
+                            );
+                            emojiStatus.draw(canvas);
+                        }`,
+        "dialog cell badge draw in transition",
+    )?;
+    write_file(&dialog_cell_path, &dialog_cell)?;
+
     let user_cell_path = proj.join("src/main/java/org/telegram/ui/Cells/UserCell.java");
     let mut user_cell = read_file(&user_cell_path)?;
     user_cell = patch_once(
