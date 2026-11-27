@@ -1,8 +1,8 @@
 use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD};
 use base64::Engine as _;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use jni::objects::{JClass, JString};
-use jni::sys::{jboolean, jbyteArray};
+use jni::objects::{JByteArray, JClass, JString};
+use jni::sys::jboolean;
 use jni::JNIEnv;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
@@ -10,7 +10,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 pub extern "system" fn Java_app_grapegram_GrapeBadges_nativeVerify(
     mut env: JNIEnv,
     _class: JClass,
-    payload: jbyteArray,
+    payload: JByteArray,
     sig_b64: JString,
     pub_pem: JString,
 ) -> jboolean {
