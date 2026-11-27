@@ -2,7 +2,7 @@ services:
   - type: web
     name: grapegram-badge-service
     runtime: docker
-    plan: starter
+    plan: free
     dockerfilePath: ./backend/Dockerfile
     dockerContext: .
     healthCheckPath: /healthz
