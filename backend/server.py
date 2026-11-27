@@ -333,7 +333,7 @@ class Store:
             merged = remote_lines + [
                 line for line in local.splitlines() if line and line not in known
             ]
-            data = b"\\n".join(merged) + (b"\\n" if merged else b"")
+            data = b"\n".join(merged) + (b"\n" if merged else b"")
             with open(local_path, "wb") as f:
                 f.write(data)
             return data
