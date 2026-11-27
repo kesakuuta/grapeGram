@@ -554,6 +554,18 @@ fn run() -> Result<(), String> {
         "mandatory api keys")?;
     write_file(&login_path, &login)?;
 
+    let cmake_path = proj.join("jni/CMakeLists.txt");
+    let mut cmake = read_file(&cmake_path)?;
+    cmake = patch_once(&cmake,
+        "set(CMAKE_CXX_FLAGS \"-DANDROID -g\")",
+        "set(CMAKE_CXX_FLAGS \"-DANDROID -g -w\")\nset(CMAKE_C_FLAGS \"${CMAKE_C_FLAGS} -w\")",
+        "cmake quiet flags")?;
+    cmake = patch_once(&cmake,
+        "        -Wall -frtti -finline-functions -ffast-math -Oz)",
+        "        -w -frtti -finline-functions -ffast-math -Oz)",
+        "cmake tgnet warnings")?;
+    write_file(&cmake_path, &cmake)?;
+
     let firebase_path = proj.join("src/main/java/org/telegram/messenger/FirebasePhoneNumberVerificationHelper.java");
     let mut firebase = read_file(&firebase_path)?;
     firebase = patch_once(&firebase, "req.api_id = BuildVars.APP_ID;",
