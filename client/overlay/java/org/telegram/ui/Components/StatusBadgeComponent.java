@@ -96,9 +96,15 @@ public class StatusBadgeComponent {
 
     public void onAttachedToWindow() {
         statusDrawable.attach();
+        if (currentDrawable instanceof GrapeBadgeDrawable) {
+            ((GrapeBadgeDrawable) currentDrawable).setCallback((Drawable.Callback) parentView);
+        }
     }
 
     public void onDetachedFromWindow() {
+        if (currentDrawable instanceof GrapeBadgeDrawable) {
+            ((GrapeBadgeDrawable) currentDrawable).setCallback(null);
+        }
         statusDrawable.detach();
     }
 }
