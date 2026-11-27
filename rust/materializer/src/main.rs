@@ -482,6 +482,11 @@ fn run() -> Result<(), String> {
         "manifest application tag",
     )?;
     m = patch_once(&m, "        tools:replace=\"android:supportsRtl\"\n", "", "supportsRtl warning")?;
+    m = m
+        .replace("@mipmap/ic_launcher_exteraless_round", "@drawable/grape_icon_original")
+        .replace("@mipmap/ic_launcher_exteraless", "@drawable/grape_icon_original")
+        .replace("vnd.com.exteraless.app.android", "vnd.app.grapegram.android")
+        .replace("\"com.exteraless.app\"", "\"app.grapegram\"");
     write_file(&manifest_path, &m)?;
 
     let st = read_file(&strings_path)?;
@@ -544,6 +549,28 @@ fn run() -> Result<(), String> {
             let original = read_file(&path)?;
             let mut text = original.replace(">exteraless<", ">grapeGram<");
             text = rebrand_xml_strings(&text);
+            if text != original {
+                write_file(&path, &text)?;
+            }
+        }
+    }
+
+    let xml_dir = res_dir.join("xml");
+    if xml_dir.is_dir() {
+        for file in fs::read_dir(&xml_dir)
+            .map_err(|e| format!("read dir {}: {}", xml_dir.display(), e))?
+        {
+            let file = file.map_err(|e| format!("read dir {}: {}", xml_dir.display(), e))?;
+            let path = file.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("xml") || !path.is_file() {
+                continue;
+            }
+            let original = read_file(&path)?;
+            let text = original
+                .replace("@mipmap/ic_launcher_exteraless_round", "@drawable/grape_icon_original")
+                .replace("@mipmap/ic_launcher_exteraless", "@drawable/grape_icon_original")
+                .replace("vnd.com.exteraless.app.android", "vnd.app.grapegram.android")
+                .replace("\"com.exteraless.app\"", "\"app.grapegram\"");
             if text != original {
                 write_file(&path, &text)?;
             }
