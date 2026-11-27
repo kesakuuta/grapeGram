@@ -1,6 +1,14 @@
 # Иконки приложения
 
-9 изображений, 512×512, RGBA, прозрачные углы (проверено декодированием PNG).
+В grapeGram доступно **58 вариантов** иконки:
+
+- 9 собственных grapeGram;
+- 18 из Cherrygram;
+- 31 из exteraGram.
+
+Полная машиночитаемая таблица с отображаемым названием, исходным ID, Android resource и автором (для community-иконок) находится в `assets/icons/upstream_catalog.json`. Исходные имена Android-ресурсов сохраняются, а компоненты launcher namespaced, чтобы не пересекаться с другими alias приложения.
+
+## Собственные grapeGram
 
 | Файл | Название |
 |---|---|
@@ -14,24 +22,29 @@
 | `grape_style_07.png` | Графит |
 | `grape_style_09.png` | Фиалка |
 
-Машиночитаемый список — `assets/icons/icons.json`.
+## Cherrygram — 18 вариантов
 
-## Реализация
+Вишня, Тёмная, Тёмная Bra, Белая, Белая Bra, Лагуна, Аква, Зелёная, Лаванда, Фиолетовый закат, Фиолетовый закат Bra, Закат, Восход, Пальмы, Пальмы Bra, Turbo, Nox, Новогодняя.
 
-- 9 `<activity-alias>` для launcher-активности, у каждого свой
-  `android:icon="@mipmap/ic_launcher_grape_N"`.
-- `IconManager` хранит выбор в одном ключе `grape_icon` (значение — имя иконки
-  из `icons.json`, по умолчанию `grapegram_original_first`).
-- Применение: `setComponentEnabledSetting` — включить выбранный alias,
-  выключить остальные, затем `DEFAULT`. Порядок важен, чтобы launcher не
-  показал две иконки.
-- Android 13+ : monochrome-слой для тематических иконок (отдельный
-  `ic_launcher_monochrome`), splash — системный.
-- Оба экрана (grapeGram → Иконка; Telegram → Настройки чатов → Иконка)
-  используют один `IconManager` и один ключ — состояние синхронно.
-- Возврат к стандартной: выбрать `Оригинальная`.
+Исходные adaptive icon XML и vector layers берутся из Cherrygram commit `9e1c901e6fbca5a9a346683b91c6d529376f5304`.
+
+## exteraGram — 31 вариант
+
+Winter, Monet, Orbit, Editor, Mole, Echpochmak, Avatar, Candy, Guitar, Sus, Frog, Hamster, Sponge, Invincible, Flappy, Nyan Cat, Ice Age, Fish, Psychosis, XP, NASA, Cyberpunk, Space, Jellyfish, Human, Sunset, Amethyst, Aurora, osu!, Google, Google ’26.
+
+Исходные adaptive icon XML, density assets и monochrome layers берутся из exteraGram commit `b4d852f48f2734a0bee1a74a0939be621612262a`. Community authors указаны в `upstream_catalog.json`.
+
+## Размещение и выбор
+
+- Единственное место выбора: **Настройки → Чаты → Иконка приложения**.
+- Все 58 вариантов используют общий `LauncherIconController` и единый механизм activity-alias.
+- При выборе включается ровно один alias, остальные отключаются.
+- По умолчанию используется `grapegram_original_first`.
+- Monet colors имеют fallback для старых Android и системные цвета на Android 12+.
+- Исходные ресурсы upstream импортируются из зафиксированных commit SHA во время CI-сборки; main-ветки upstream не используются.
 
 ## Проверки
 
-Выбор в обоих местах, сохранение после перезапуска, отсутствие дублей в
-launcher, прозрачность углов, отсутствие чёрной рамки, splash на Android 12+.
+- Все alias names уникальны и существуют в manifest.
+- Все enum entries имеют собственные title strings.
+- Сохранение выбора после перезапуска и отсутствие дублирующихся launcher icons проверяются на устройстве.
