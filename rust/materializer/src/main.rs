@@ -625,6 +625,18 @@ fn run() -> Result<(), String> {
         "return LauncherIcon.GRAPE_ORIGINAL;",
         "default current icon fallback",
     )?;
+    app_icons = patch_once(
+        &app_icons,
+        "import android.graphics.Color;",
+        "import android.graphics.Color;\nimport android.os.Build;",
+        "adaptive icon API import",
+    )?;
+    app_icons = patch_once(
+        &app_icons,
+        "        for (LauncherIcon icon : LauncherIcon.values()) {\n            if (!icon.premium || !blocked || LauncherIconController.isEnabled(icon)) {",
+        "        for (LauncherIcon icon : LauncherIcon.values()) {\n            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O\n                    && (icon.name().startsWith(\"CHERRY_\") || icon.name().startsWith(\"EXTERA_\"))) {\n                continue;\n            }\n            if (!icon.premium || !blocked || LauncherIconController.isEnabled(icon)) {",
+        "adaptive icon API availability",
+    )?;
     write_file(&app_icons_path, &app_icons)?;
 
     let mut m = disable_alias(&manifest_before, "org.telegram.messenger.ExteralessIcon")?;
