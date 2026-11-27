@@ -474,6 +474,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("GRP_PORT", "8080"))
+    port = int(os.environ.get("PORT", os.environ.get("GRP_PORT", "8080")))
     print(f"grapeGram badge service on :{port}")
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
