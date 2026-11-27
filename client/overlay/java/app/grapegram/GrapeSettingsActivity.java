@@ -1,14 +1,8 @@
 package app.grapegram;
 
 import android.content.Context;
-import android.content.DialogInterface;
-import android.graphics.Typeface;
-import android.util.TypedValue;
-import android.view.Gravity;
 import android.view.View;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.widget.TextView;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import org.telegram.messenger.AndroidUtilities;
@@ -19,17 +13,48 @@ import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Components.IconBackgroundColors;
+import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.UItem;
+import org.telegram.ui.Components.UniversalAdapter;
+import org.telegram.ui.Components.UniversalRecyclerView;
 import org.telegram.ui.LauncherIconController;
 import org.telegram.ui.LauncherIconController.LauncherIcon;
+import org.telegram.ui.SettingsActivity.SettingCell;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/** The single grapeGram settings hub. */
+import app.exteraless.ai.ui.AiSettingsActivity;
+import app.exteraless.plugins.Plugin;
+import app.exteraless.plugins.PluginsController;
+import app.exteraless.plugins.ui.PluginActivityLogActivity;
+import app.exteraless.plugins.ui.PluginPermissionsActivity;
+import app.exteraless.plugins.ui.PluginsActivity;
+import app.exteraless.settings.OpenExteraAppearanceActivity;
+import app.exteraless.settings.OpenExteraAyuMomentsActivity;
+import app.exteraless.settings.OpenExteraChatsActivity;
+
+/** The single grapeGram settings hub, built from Telegram's own settings cells. */
 public class GrapeSettingsActivity extends BaseFragment {
+
+    private static final int ID_ICON = 1;
+    private static final int ID_APPEARANCE = 2;
+    private static final int ID_CHATS = 3;
+    private static final int ID_AYU = 4;
+    private static final int ID_AI = 5;
+    private static final int ID_PLUGINS = 6;
+    private static final int ID_PLUGIN_PERMISSIONS = 7;
+    private static final int ID_PLUGIN_LOG = 8;
+    private static final int ID_BADGES = 9;
+    private static final int ID_ABOUT = 10;
+
+    private UniversalRecyclerView listView;
 
     @Override
     public View createView(Context context) {
+        setHasOwnBackground(true);
+
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setAllowOverlayTitle(true);
         actionBar.setTitle("grapeGram");
@@ -42,41 +67,98 @@ public class GrapeSettingsActivity extends BaseFragment {
             }
         });
 
-        ScrollView scroll = new ScrollView(context);
-        scroll.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray));
-        LinearLayout list = new LinearLayout(context);
-        list.setOrientation(LinearLayout.VERTICAL);
-        list.setPadding(0, AndroidUtilities.dp(8), 0, AndroidUtilities.dp(16));
-        scroll.addView(list, new ScrollView.LayoutParams(
-                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
+        FrameLayout contentView = new FrameLayout(context);
+        contentView.setBackgroundColor(getThemedColor(Theme.key_windowBackgroundGray));
 
-        addHeader(list, context, "grapeGram " + GrapeConfig.VERSION);
+        listView = new UniversalRecyclerView(this, this::fillItems, this::onClick, null);
+        listView.setSections();
+        listView.adapter.setApplyBackground(false);
+        listView.setSectionsDrawBackground(true);
+        contentView.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        actionBar.setAdaptiveBackground(listView);
 
-        addRow(list, context, "Иконка приложения", currentIconTitle(), v -> showIconPicker());
-        addRow(list, context, "Оформление", "темы, анимации, Monet",
-                v -> open("app.exteraless.settings.OpenExteraAppearanceActivity"));
-        addRow(list, context, "Чаты", "сообщения, папки, уведомления",
-                v -> open("app.exteraless.settings.OpenExteraChatsActivity"));
-        addRow(list, context, "AyuMoments", "истории и статусы",
-                v -> open("app.exteraless.settings.OpenExteraAyuMomentsActivity"));
-        addRow(list, context, "AI", "провайдеры и модели",
-                v -> open("app.exteraless.ai.ui.AiSettingsActivity"));
-        addRow(list, context, "Плагины", "установка, исходники, AI-анализ",
-                v -> open("app.exteraless.plugins.ui.PluginsActivity"));
-        addRow(list, context, "Разрешения плагинов", "сеть, файлы, сообщения, хуки",
-                v -> open("app.exteraless.plugins.ui.PluginPermissionsActivity"));
-        addRow(list, context, "Журнал активности", "события плагинов и отказы",
-                v -> open("app.exteraless.plugins.ui.PluginActivityLogActivity"));
-        addRow(list, context, "Бейджи", "подписанный список из GitHub", v -> showBadges());
-        addRow(list, context, "О grapeGram", "версия, авторы, лицензии", v -> showAbout());
-
-        fragmentView = scroll;
+        fragmentView = contentView;
         return fragmentView;
+    }
+
+    private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
+        items.add(UItem.asHeader("grapeGram " + GrapeConfig.VERSION));
+        items.add(SettingCell.Factory.of(
+                ID_ICON, 0xFF7C4DFF, 0xFF5E35B1, R.drawable.grape_icon_original,
+                "Иконка приложения", null, currentIconTitle()));
+        items.add(UItem.asShadow(null));
+
+        items.add(UItem.asHeader("Внешний вид"));
+        items.add(row(ID_APPEARANCE, IconBackgroundColors.PURPLE, R.drawable.settings_account,
+                "Оформление", "темы, анимации, Monet"));
+        items.add(row(ID_CHATS, IconBackgroundColors.BLUE, R.drawable.settings_chat,
+                "Чаты", "сообщения, папки, уведомления"));
+        items.add(row(ID_AYU, IconBackgroundColors.ORANGE, R.drawable.settings_folders,
+                "AyuMoments", "истории и статусы"));
+        items.add(UItem.asShadow(null));
+
+        items.add(UItem.asHeader("Интеллект и расширения"));
+        items.add(row(ID_AI, IconBackgroundColors.CYAN, R.drawable.msg_bot,
+                "AI", "провайдеры и модели"));
+        items.add(row(ID_PLUGINS, IconBackgroundColors.GREEN, R.drawable.settings_premium,
+                "Плагины", "установка, исходники, AI-анализ"));
+        items.add(row(ID_PLUGIN_PERMISSIONS, IconBackgroundColors.RED, R.drawable.msg_permissions_solar,
+                "Разрешения плагинов", "сеть, файлы, сообщения, хуки"));
+        items.add(row(ID_PLUGIN_LOG, IconBackgroundColors.GRAY, R.drawable.settings_data,
+                "Журнал активности", "события плагинов и отказы"));
+        items.add(UItem.asShadow(null));
+
+        items.add(UItem.asHeader("О приложении"));
+        items.add(row(ID_BADGES, IconBackgroundColors.BLUE_DEEP, R.drawable.filled_profile_settings,
+                "Бейджи", "подписанный список из GitHub"));
+        items.add(row(ID_ABOUT, IconBackgroundColors.ORANGE_DEEP, R.drawable.settings_ask,
+                "О grapeGram", "версия, авторы, лицензии"));
+    }
+
+    private static UItem row(int id, IconBackgroundColors colors, int icon, String title, String subtitle) {
+        return SettingCell.Factory.of(id, colors.top, colors.bottom, icon, title, subtitle);
+    }
+
+    private void onClick(UItem item, View view, int position, float x, float y) {
+        switch (item.id) {
+            case ID_ICON:
+                showIconPicker();
+                break;
+            case ID_APPEARANCE:
+                presentFragment(new OpenExteraAppearanceActivity());
+                break;
+            case ID_CHATS:
+                presentFragment(new OpenExteraChatsActivity());
+                break;
+            case ID_AYU:
+                presentFragment(new OpenExteraAyuMomentsActivity());
+                break;
+            case ID_AI:
+                presentFragment(new AiSettingsActivity());
+                break;
+            case ID_PLUGINS:
+                presentFragment(new PluginsActivity());
+                break;
+            case ID_PLUGIN_PERMISSIONS:
+                showPluginPicker(true);
+                break;
+            case ID_PLUGIN_LOG:
+                showPluginPicker(false);
+                break;
+            case ID_BADGES:
+                showBadges();
+                break;
+            case ID_ABOUT:
+                showAbout();
+                break;
+            default:
+                break;
+        }
     }
 
     private String currentIconTitle() {
         for (LauncherIcon icon : LauncherIcon.values()) {
-            if (LauncherIconController.isEnabled(icon)) {
+            if (icon.name().startsWith("GRAPE_") && LauncherIconController.isEnabled(icon)) {
                 return LocaleController.getString(icon.title);
             }
         }
@@ -96,29 +178,48 @@ public class GrapeSettingsActivity extends BaseFragment {
             toast("Иконки не найдены");
             return;
         }
+        if (getParentActivity() == null) {
+            return;
+        }
         new AlertDialog.Builder(getParentActivity())
                 .setTitle("Иконка приложения")
                 .setItems(titles.toArray(new CharSequence[0]), (dialog, which) -> {
                     LauncherIconController.setIcon(icons.get(which));
                     toast("Иконка: " + titles.get(which));
+                    if (listView != null && listView.adapter != null) {
+                        listView.adapter.update(true);
+                    }
                 })
                 .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
                 .show();
     }
 
-    private void open(String className) {
-        try {
-            Class<?> c = Class.forName(className);
-            Object o = c.getDeclaredConstructor().newInstance();
-            if (o instanceof BaseFragment) {
-                presentFragment((BaseFragment) o);
-                return;
-            }
-        } catch (Throwable t) {
-            toast("Недоступно: " + t.getClass().getSimpleName());
+    private void showPluginPicker(boolean permissions) {
+        final Context context = getParentActivity();
+        if (context == null) {
             return;
         }
-        toast("Экран недоступен в этой сборке");
+        final List<Plugin> plugins = PluginsController.getInstance().getPluginsSnapshot();
+        if (plugins == null || plugins.isEmpty()) {
+            presentFragment(new PluginsActivity());
+            return;
+        }
+        final CharSequence[] names = new CharSequence[plugins.size()];
+        for (int i = 0; i < plugins.size(); i++) {
+            names[i] = plugins.get(i).getDisplayName();
+        }
+        new AlertDialog.Builder(context)
+                .setTitle(permissions ? "Разрешения плагинов" : "Журнал активности")
+                .setItems(names, (dialog, which) -> {
+                    final String pluginId = plugins.get(which).id;
+                    if (permissions) {
+                        presentFragment(new PluginPermissionsActivity(pluginId));
+                    } else {
+                        presentFragment(new PluginActivityLogActivity(pluginId));
+                    }
+                })
+                .setNegativeButton(LocaleController.getString(R.string.Cancel), null)
+                .show();
     }
 
     private void showBadges() {
@@ -166,47 +267,6 @@ public class GrapeSettingsActivity extends BaseFragment {
                         + "Лицензия GPL-3.0.")
                 .setPositiveButton(LocaleController.getString(R.string.OK), null)
                 .show();
-    }
-
-    private void addHeader(LinearLayout list, Context context, String text) {
-        TextView tv = new TextView(context);
-        tv.setText(text);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
-        tv.setTypeface(Typeface.DEFAULT_BOLD);
-        tv.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2));
-        tv.setPadding(AndroidUtilities.dp(18), AndroidUtilities.dp(12),
-                AndroidUtilities.dp(18), AndroidUtilities.dp(6));
-        list.addView(tv);
-    }
-
-    private void addRow(LinearLayout list, Context context, String title, String sub,
-                        View.OnClickListener listener) {
-        LinearLayout row = new LinearLayout(context);
-        row.setOrientation(LinearLayout.VERTICAL);
-        row.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-        row.setPadding(AndroidUtilities.dp(18), AndroidUtilities.dp(12),
-                AndroidUtilities.dp(18), AndroidUtilities.dp(12));
-        row.setOnClickListener(listener);
-
-        TextView t = new TextView(context);
-        t.setText(title);
-        t.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
-        t.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-        row.addView(t);
-
-        if (sub != null && sub.length() > 0) {
-            TextView s = new TextView(context);
-            s.setText(sub);
-            s.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
-            s.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2));
-            s.setPadding(0, AndroidUtilities.dp(2), 0, 0);
-            row.addView(s);
-        }
-
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, AndroidUtilities.dp(1), 0, 0);
-        list.addView(row, lp);
     }
 
     private void toast(String text) {

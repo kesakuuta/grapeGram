@@ -433,6 +433,7 @@ fn run() -> Result<(), String> {
         ],
         "manifest application tag",
     )?;
+    m = patch_once(&m, "        tools:replace=\"android:supportsRtl\"\n", "", "supportsRtl warning")?;
     write_file(&manifest_path, &m)?;
 
     let st = read_file(&strings_path)?;
@@ -451,25 +452,40 @@ fn run() -> Result<(), String> {
     for entry in fs::read_dir(&res_dir).map_err(|e| format!("read dir {}: {}", res_dir.display(), e))? {
         let entry = entry.map_err(|e| format!("read dir {}: {}", res_dir.display(), e))?;
         let name = entry.file_name().to_string_lossy().into_owned();
-        if !name.starts_with("values-") || !entry.path().is_dir() {
+        if !(name == "values" || name.starts_with("values-")) || !entry.path().is_dir() {
             continue;
         }
         let path = entry.path().join("strings.xml");
         if !path.is_file() {
             continue;
         }
-        let text = read_file(&path)?;
+        let mut text = read_file(&path)?;
         let (updated, n) = set_xml_string(&text, "AppName", APP_NAME);
         if n > 0 {
             if n != 1 {
                 return Err(format!("{}: AppName found {} times, expected at most 1", path.display(), n));
             }
-            write_file(&path, &updated)?;
+            text = updated;
         }
+        let (updated, n) = set_xml_string(&text, "Page1Title", APP_NAME);
+        if n > 0 {
+            text = updated;
+        }
+        let (updated, n) = set_xml_string(&text, "Page1Message",
+            "The world's **fastest** messaging app. It is free and secure.");
+        if n > 0 {
+            text = updated;
+        }
+        write_file(&path, &text)?;
     }
 
-    let props = read_file(&props_path)?;
-    write_file(&props_path, &set_gradle_property(&props, "APP_PACKAGE", PACKAGE)?)?;
+    let props = set_gradle_property(&read_file(&props_path)?, "APP_PACKAGE", PACKAGE)?;
+    let mut props = props;
+    if !props.contains("org.gradle.warning.mode=none") {
+        props.push_str("org.gradle.warning.mode=none\n");
+        props.push_str("android.javaCompile.suppressSourceTargetDeprecationWarning=true\n");
+    }
+    write_file(&props_path, &props)?;
 
     let gs_text = read_file(&gs_path)?;
     let mut gs: Value = serde_json::from_str(&gs_text)
@@ -490,14 +506,69 @@ fn run() -> Result<(), String> {
     clients.push(dup);
     write_file(&gs_path, &format!("{}\n", serde_json::to_string_pretty(&gs).map_err(|e| e.to_string())?))?;
 
-    let build = read_file(&build_path)?;
-    let build = patch_once(
+    let mut build = read_file(&build_path)?;
+    build = patch_once(
         &build,
         "    signingConfigs {\n        release {\n",
         "    signingConfigs {\n        release {\n            storeType 'PKCS12'\n",
         "signingConfigs.release",
     )?;
+    build = patch_once(
+        &build,
+        "dependencies {\n",
+        "dependencies {\n    implementation 'org.bouncycastle:bcprov-jdk15to18:1.78'\n",
+        "bouncycastle dependency",
+    )?;
+    build.push_str("\ntasks.withType(JavaCompile).configureEach { options.compilerArgs += ['-Xlint:-options', '-Xlint:-classfile'] }\n");
     write_file(&build_path, &build)?;
+
+    let locale_path = proj.join("src/main/java/org/telegram/messenger/LocaleController.java");
+    let mut locale = read_file(&locale_path)?;
+    locale = patch_once(&locale,
+        "return ApplicationLoader.applicationContext.getString(R.string.OpenExtera);",
+        "return \"grapeGram\";", "app name")?;
+    locale = patch_once(&locale, "return \"exteraless\";", "return \"grapeGram\";", "app name fallback")?;
+    write_file(&locale_path, &locale)?;
+
+    let oe_path = proj.join("src/main/res/values/strings_oe.xml");
+    let mut oe = read_file(&oe_path)?;
+    oe = patch_once(&oe,
+        "<string name=\"OpenExtera\" translatable=\"false\">exteraless</string>",
+        "<string name=\"OpenExtera\" translatable=\"false\">grapeGram</string>",
+        "OpenExtera string")?;
+    write_file(&oe_path, &oe)?;
+
+    let intro_path = proj.join("src/main/java/org/telegram/ui/IntroActivity.java");
+    let mut intro = read_file(&intro_path)?;
+    intro = patch_once(&intro, "R.drawable.telegram_logo", "R.drawable.grape_icon_original", "intro wordmark")?;
+    intro = patch_once(&intro,
+        "new int[]{R.drawable.exteraless_icon_background, R.drawable.exteraless_icon_foreground}",
+        "new int[]{R.drawable.grape_icon_original}", "intro icon")?;
+    write_file(&intro_path, &intro)?;
+
+    let login_path = proj.join("src/main/java/org/telegram/ui/LoginActivity.java");
+    let mut login = read_file(&login_path)?;
+    login = patch_once(&login,
+        "    public void onResume() {\n        super.onResume();\n        if (newAccount) {",
+        "    public void onResume() {\n        super.onResume();\n        app.grapegram.GrapeApiGate.maybeAsk(this);\n        if (newAccount) {",
+        "mandatory api keys")?;
+    write_file(&login_path, &login)?;
+
+    let firebase_path = proj.join("src/main/java/org/telegram/messenger/FirebasePhoneNumberVerificationHelper.java");
+    let mut firebase = read_file(&firebase_path)?;
+    firebase = patch_once(&firebase, "req.api_id = BuildVars.APP_ID;",
+        "req.api_id = tw.nekomimi.nekogram.NekoXConfig.currentAppId();", "firebase api id")?;
+    firebase = patch_once(&firebase, "req.api_hash = BuildVars.APP_HASH;",
+        "req.api_hash = tw.nekomimi.nekogram.NekoXConfig.currentAppHash();", "firebase api hash")?;
+    write_file(&firebase_path, &firebase)?;
+
+    let app_path = proj.join("src/main/java/org/telegram/messenger/ApplicationLoader.java");
+    let mut app = read_file(&app_path)?;
+    app = patch_once(&app,
+        "        super.onCreate();\n\n        // The widget engine's isolated process",
+        "        super.onCreate();\n        app.grapegram.GrapeBadgeBridge.syncAsync(getApplicationContext());\n\n        // The widget engine's isolated process",
+        "badge bridge")?;
+    write_file(&app_path, &app)?;
 
     let manifest = read_file(&manifest_path)?;
     expect_count(&manifest, MARK, 1, "verify alias original")?;
