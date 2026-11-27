@@ -97,14 +97,20 @@ class Store:
         return _load(os.path.join(self.data_dir, "owner_users.json"))["owners"]
 
     def new_challenge(self) -> str:
+        code, _ = self.new_challenge_pair()
+        return code
+
+    def new_challenge_pair(self):
         code = secrets.token_hex(4).upper()
+        poll_token = secrets.token_urlsafe(32)
         with self.lock:
             now = time.time()
             self.challenges = {c: v for c, v in self.challenges.items()
                                if v["expires"] > now}
             self.challenges[code] = {"expires": now + CHALLENGE_TTL,
+                                     "poll_token": poll_token,
                                      "session": None, "used": False}
-        return code
+        return code, poll_token
 
     def bind(self, code: str, telegram_id: str):
         with self.lock:
@@ -117,6 +123,20 @@ class Store:
             token = secrets.token_urlsafe(32)
             self.sessions[token] = {"owner": str(telegram_id),
                                     "expires": time.time() + SESSION_TTL}
+            ch["session"] = token
+            return token
+
+    def poll_challenge(self, code: str, poll_token: str):
+        with self.lock:
+            ch = self.challenges.get(code)
+            if not ch or ch["expires"] < time.time():
+                raise PermissionError("challenge is invalid or expired")
+            if not secrets.compare_digest(ch["poll_token"], str(poll_token)):
+                raise PermissionError("invalid challenge poll token")
+            if not ch["session"]:
+                return None
+            token = ch["session"]
+            del self.challenges[code]
             return token
 
     def require_owner(self, token: str) -> str:
@@ -207,8 +227,15 @@ class Handler(BaseHTTPRequestHandler):
         try:
             body = self._body()
             if self.path == "/challenge":
-                return self._json(200, {"code": STORE.new_challenge(),
+                code, poll_token = STORE.new_challenge_pair()
+                return self._json(200, {"code": code, "poll_token": poll_token,
                                         "expires_in": CHALLENGE_TTL})
+            if self.path == "/challenge/status":
+                token = STORE.poll_challenge(str(body.get("code", "")),
+                                             str(body.get("poll_token", "")))
+                if token is None:
+                    return self._json(200, {"status": "pending"})
+                return self._json(200, {"status": "bound", "session": token})
             if self.path == "/telegram/webhook":
                 secret = os.environ.get("GRP_BOT_SECRET", "")
                 if not secret or self.headers.get(
