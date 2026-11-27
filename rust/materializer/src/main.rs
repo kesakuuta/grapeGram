@@ -590,14 +590,6 @@ fn run() -> Result<(), String> {
     locale = patch_once(&locale, "return \"exteraless\";", "return \"grapeGram\";", "app name fallback")?;
     write_file(&locale_path, &locale)?;
 
-    let oe_path = proj.join("src/main/res/values/strings_oe.xml");
-    let mut oe = read_file(&oe_path)?;
-    oe = patch_once(&oe,
-        "<string name=\"OpenExtera\" translatable=\"false\">exteraless</string>",
-        "<string name=\"OpenExtera\" translatable=\"false\">grapeGram</string>",
-        "OpenExtera string")?;
-    write_file(&oe_path, &oe)?;
-
     let intro_path = proj.join("src/main/java/org/telegram/ui/IntroActivity.java");
     let mut intro = read_file(&intro_path)?;
     intro = patch_once(&intro, "R.drawable.telegram_logo", "R.drawable.grape_icon_original", "intro wordmark")?;
