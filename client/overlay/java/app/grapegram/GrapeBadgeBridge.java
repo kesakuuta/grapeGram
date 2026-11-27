@@ -42,8 +42,12 @@ public final class GrapeBadgeBridge {
 
     public static synchronized void sync(Context context) {
         // Refresh on launch; GrapeBadges falls back to the last verified cache offline.
-        GrapeBadges.Result result = GrapeBadges.load(context, true);
-        if (!result.ok) {
+        sync(context, GrapeBadges.load(context, true));
+    }
+
+    /** Applies a result that has already been fetched by the caller, avoiding a second request. */
+    public static synchronized void sync(Context context, GrapeBadges.Result result) {
+        if (result == null || !result.ok) {
             return;
         }
 
