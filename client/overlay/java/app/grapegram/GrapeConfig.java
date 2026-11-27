@@ -9,6 +9,7 @@ public final class GrapeConfig {
     public static final String VERSION = "1.0.0";
     public static final String DATA_BASE = "@DATA_BASE@";
     public static final String PUBLIC_KEY_PEM = "@PUBLIC_KEY_PEM@";
+    public static final String BADGE_SERVICE = "@BADGE_SERVICE@";
 
     private static final String PREFS = "grapegram";
 
