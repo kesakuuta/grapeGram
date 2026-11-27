@@ -20,6 +20,11 @@ jobs:
           git -C "$BASE" submodule update --init --recursive --depth 1 || true
           cargo build --release --manifest-path rust/materializer/Cargo.toml
           GRP_ROOT="$GITHUB_WORKSPACE" rust/materializer/target/release/grape-materializer --root "$BASE"
+      - name: AAPT2 diagnosis
+        run: |
+          AAPT2="$(find "$ANDROID_HOME/build-tools" -name aapt2 | head -1)"
+          echo "using $AAPT2"
+          "$AAPT2" compile --dir "$RUNNER_TEMP/base/TMessagesProj/src/main/res" -o "$RUNNER_TEMP/res.zip" 2>&1 | head -60 || true
       - name: Pack values
         run: |
           mkdir -p "$RUNNER_TEMP/out"
