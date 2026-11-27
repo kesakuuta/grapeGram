@@ -335,7 +335,7 @@ impl Store {
         }))?;
         crate::github::publish_if_configured(
             &self.data_dir,
-            &["badge_users.json", "signatures/badge_users.json.sig"],
+            &["badge_users.json", "signatures/badge_users.json.sig", "audit.jsonl"],
         );
         Ok(version)
     }
