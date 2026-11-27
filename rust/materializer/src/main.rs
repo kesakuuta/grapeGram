@@ -1035,6 +1035,50 @@ fn run() -> Result<(), String> {
     )?;
     write_file(&dialog_cell_path, &dialog_cell)?;
 
+    let theme_activity_path = proj.join("src/main/java/org/telegram/ui/ThemeActivity.java");
+    let mut theme_activity = read_file(&theme_activity_path)?;
+    theme_activity = patch_once(
+        &theme_activity,
+        "            appIconHeaderRow = rowCount++;\n            appIconSelectorRow = rowCount++;\n            appIconShadowRow = rowCount++;\n",
+        "",
+        "move app icon picker out of theme settings",
+    )?;
+    write_file(&theme_activity_path, &theme_activity)?;
+
+    let chats_activity_path = proj.join("src/main/java/app/exteraless/settings/OpenExteraChatsActivity.java");
+    let mut chats_activity = read_file(&chats_activity_path)?;
+    chats_activity = patch_once(
+        &chats_activity,
+        "    private int chatsHeaderRow = -1;\n",
+        "    private int chatsHeaderRow = -1;\n    private int appIconRow = -1;\n",
+        "chat settings app icon row field",
+    )?;
+    chats_activity = patch_once(
+        &chats_activity,
+        "        chatsHeaderRow = addRow(\"chatsHeader\");\n        quickTransitionGroupRow = addRow(\"quickTransition\");",
+        "        chatsHeaderRow = addRow(\"chatsHeader\");\n        appIconRow = addRow(\"appIcon\");\n        quickTransitionGroupRow = addRow(\"quickTransition\");",
+        "chat settings app icon row placement",
+    )?;
+    chats_activity = patch_once(
+        &chats_activity,
+        "        } else if (position == chatSettingsRow) {\n            presentFragment(new ThemeActivity(ThemeActivity.THEME_TYPE_BASIC));\n            return;\n        } else if (position == aiChatRow) {",
+        "        } else if (position == chatSettingsRow) {\n            presentFragment(new ThemeActivity(ThemeActivity.THEME_TYPE_BASIC));\n            return;\n        } else if (position == appIconRow) {\n            presentFragment(new app.exteraless.appicons.AppIconsActivity());\n            return;\n        } else if (position == aiChatRow) {",
+        "chat settings app icon navigation",
+    )?;
+    chats_activity = patch_once(
+        &chats_activity,
+        "            } else if (position == chatSettingsRow) {\n                cell.setTextAndIcon(getString(R.string.OEChatsChatSettings), R.drawable.msg_discussion, false);\n                cell.setSubtitle(getString(R.string.OEChatsChatSettingsInfo));\n            }",
+        "            } else if (position == chatSettingsRow) {\n                cell.setTextAndIcon(getString(R.string.OEChatsChatSettings), R.drawable.msg_discussion, false);\n                cell.setSubtitle(getString(R.string.OEChatsChatSettingsInfo));\n            } else if (position == appIconRow) {\n                cell.setTextAndIcon(\"Иконка приложения\", R.drawable.grape_icon_original, true);\n                cell.setSubtitle(\"58 вариантов · grapeGram, Cherrygram, exteraGram\");\n            }",
+        "chat settings app icon row binding",
+    )?;
+    chats_activity = patch_once(
+        &chats_activity,
+        "position == inlineMathSettingsRow || position == aiChatRow || position == chatSettingsRow || position == menusRow || position == mediaRow",
+        "position == inlineMathSettingsRow || position == aiChatRow || position == chatSettingsRow || position == appIconRow || position == menusRow || position == mediaRow",
+        "chat settings app icon text cell type",
+    )?;
+    write_file(&chats_activity_path, &chats_activity)?;
+
     let user_cell_path = proj.join("src/main/java/org/telegram/ui/Cells/UserCell.java");
     let mut user_cell = read_file(&user_cell_path)?;
     user_cell = patch_once(
