@@ -268,7 +268,7 @@ class Store:
                 merged_lines = remote_lines + [
                     line for line in local_bytes.splitlines() if line and line not in known
                 ]
-                local_bytes = b"\\n".join(merged_lines) + (b"\\n" if merged_lines else b"")
+                local_bytes = b"\n".join(merged_lines) + (b"\n" if merged_lines else b"")
                 with open(local_path, "wb") as f:
                     f.write(local_bytes)
             encoded = base64.b64encode(local_bytes).decode("ascii")
