@@ -174,8 +174,8 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
             try {
                 HttpURLConnection connection = (HttpURLConnection) new URL(base + "/data/audit.jsonl").openConnection();
                 connection.setRequestMethod("GET");
-                connection.setConnectTimeout(30000);
-                connection.setReadTimeout(45000);
+                connection.setConnectTimeout(60000);
+                connection.setReadTimeout(90000);
                 connection.setRequestProperty("User-Agent", "grapeGram/" + GrapeConfig.VERSION);
                 String audit;
                 try {
@@ -315,8 +315,8 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
         if (base == null || base.isEmpty()) throw new IllegalStateException("URL сервиса не настроен");
         HttpURLConnection connection = (HttpURLConnection) new URL(base + path).openConnection();
         connection.setRequestMethod("POST");
-        connection.setConnectTimeout(30000);
-        connection.setReadTimeout(45000);
+        connection.setConnectTimeout(60000);
+        connection.setReadTimeout(90000);
         connection.setDoOutput(true);
         connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
         if (token != null && !token.isEmpty()) connection.setRequestProperty("Authorization", "Bearer " + token);
