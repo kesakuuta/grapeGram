@@ -514,7 +514,19 @@ fn run() -> Result<(), String> {
         "dependencies {\n    implementation 'org.bouncycastle:bcprov-jdk15to18:1.78'\n",
         "bouncycastle dependency",
     )?;
+    build = patch_once(&build, "            version '3.11'", "            version = '3.11'", "chaquopy version assignment")?;
+    build = patch_once(&build, "        aidl true", "        aidl = true", "aidl assignment")?;
     write_file(&build_path, &build)?;
+
+    let settings_root = args.root.join("settings.gradle");
+    let mut settings_root_text = read_file(&settings_root)?;
+    settings_root_text = patch_once(
+        &settings_root_text,
+        "maven { url \"https://maven.aliucord.com/releases\" }",
+        "maven { url = uri(\"https://maven.aliucord.com/releases\") }",
+        "maven url assignment",
+    )?;
+    write_file(&settings_root, &settings_root_text)?;
 
     let pg_path = proj.join("proguard-rules.pro");
     let mut pg = read_file(&pg_path)?;
