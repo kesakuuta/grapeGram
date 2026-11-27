@@ -20,6 +20,8 @@ const SESSION_TTL: f64 = 3600.0;
 struct Challenge {
     expires: f64,
     used: bool,
+    poll_token: String,
+    session: Option<String>,
 }
 
 struct Session {
@@ -123,7 +125,12 @@ impl Store {
     }
 
     pub fn new_challenge(&self) -> Result<String, ApiError> {
+        self.new_challenge_pair().map(|(code, _)| code)
+    }
+
+    pub fn new_challenge_pair(&self) -> Result<(String, String), ApiError> {
         let code = random_hex(4)?;
+        let poll_token = random_token()?;
         let mut inner = self.lock()?;
         let now = now_seconds();
         inner.challenges.retain(|_, value| value.expires > now);
@@ -132,9 +139,11 @@ impl Store {
             Challenge {
                 expires: now + CHALLENGE_TTL,
                 used: false,
+                poll_token: poll_token.clone(),
+                session: None,
             },
         );
-        Ok(code)
+        Ok((code, poll_token))
     }
 
     pub fn bind(&self, code: &str, telegram_id: &str) -> Result<String, ApiError> {
@@ -153,6 +162,7 @@ impl Store {
             return Err(forbidden("not an owner"));
         }
         challenge.used = true;
+        challenge.session = Some(token.clone());
         inner.sessions.insert(
             token.clone(),
             Session {
@@ -161,6 +171,22 @@ impl Store {
             },
         );
         Ok(token)
+    }
+
+    pub fn poll_challenge(&self, code: &str, poll_token: &str) -> Result<Option<String>, ApiError> {
+        let mut inner = self.lock()?;
+        let challenge = inner
+            .challenges
+            .get(code)
+            .ok_or_else(|| forbidden("challenge is invalid or expired"))?;
+        if challenge.expires < now_seconds() || challenge.poll_token != poll_token {
+            return Err(forbidden("challenge is invalid or expired"));
+        }
+        let session = challenge.session.clone();
+        if session.is_some() {
+            inner.challenges.remove(code);
+        }
+        Ok(session)
     }
 
     pub fn require_owner(&self, token: &str) -> Result<String, ApiError> {
@@ -325,6 +351,24 @@ mod tests {
         assert!(store.bind(&code, "7293365262").is_ok());
         let second = store.bind(&code, "7293365262");
         assert!(matches!(second, Err(ApiError::Forbidden(_))));
+        cleanup(&directory);
+    }
+
+    #[test]
+    fn app_can_poll_owner_binding_without_exposing_session() {
+        let (store, directory) = test_store("poll-binding");
+        let (code, poll_token) = store.new_challenge_pair().unwrap();
+        assert_eq!(store.poll_challenge(&code, &poll_token).unwrap(), None);
+        assert!(matches!(
+            store.poll_challenge(&code, "wrong-token"),
+            Err(ApiError::Forbidden(_))
+        ));
+        let session = store.bind(&code, "960792706").unwrap();
+        assert_eq!(store.poll_challenge(&code, &poll_token).unwrap(), Some(session));
+        assert!(matches!(
+            store.poll_challenge(&code, &poll_token),
+            Err(ApiError::Forbidden(_))
+        ));
         cleanup(&directory);
     }
 
