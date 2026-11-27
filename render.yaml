@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: grapegram-badge-service
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: GRP_PORT
+        value: "8080"
+      - key: GRP_SIGNING_KEY_PEM
+        sync: false
+      - key: GRP_BOT_SECRET
+        sync: false
+      - key: GRP_GITHUB_TOKEN
+        sync: false
+      - key: GRP_GITHUB_REPO
+        value: kesakuuta/grapeGram
+      - key: GRP_GITHUB_BRANCH
+        value: main
