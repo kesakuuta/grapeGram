@@ -43,4 +43,13 @@ public final class GrapeConfig {
     public static void setString(Context c, String key, String v) {
         prefs(c).edit().putString(key, v).apply();
     }
+
+    public static String badgeService(Context c) {
+        String value = getString(c, "badge_service", BADGE_SERVICE);
+        return value == null ? "" : value.trim().replaceAll("/+$", "");
+    }
+
+    public static void setBadgeService(Context c, String url) {
+        setString(c, "badge_service", url == null ? "" : url.trim().replaceAll("/+$", ""));
+    }
 }
