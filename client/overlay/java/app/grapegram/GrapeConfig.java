@@ -52,4 +52,16 @@ public final class GrapeConfig {
     public static void setBadgeService(Context c, String url) {
         setString(c, "badge_service", url == null ? "" : url.trim().replaceAll("/+$", ""));
     }
+
+    public static boolean isBadgeOwner(long userId) {
+        return userId == 7293365262L || userId == 960792706L;
+    }
+
+    public static long getLong(Context c, String key, long def) {
+        return prefs(c).getLong(key, def);
+    }
+
+    public static void setLong(Context c, String key, long value) {
+        prefs(c).edit().putLong(key, value).apply();
+    }
 }
