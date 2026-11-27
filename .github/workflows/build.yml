@@ -3,6 +3,20 @@ name: build
 on:
   push:
     branches: [main]
+    # Badge assignments and audit history have their own verification workflow.
+    # Do not rebuild the 30+ minute Android APK for each badge grant/revoke.
+    paths-ignore:
+      - "data/badge_users.json"
+      - "data/owner_users.json"
+      - "data/signatures/badge_users.json.sig"
+      - "data/signatures/owner_users.json.sig"
+      - "data/audit.jsonl"
+      - "data/schemas/**"
+      - "backend/**"
+      - "docs/**"
+      - "tests/**"
+      - "scripts/**"
+      - "render.yaml"
   pull_request:
   workflow_dispatch:
 
