@@ -9,6 +9,9 @@
 1. GitHub Actions скачивает точный commit `exteraless/exteraless` и его submodules.
 2. Отдельно получает закреплённые ресурсы иконок Cherrygram и exteraGram.
 3. Собирает `rust/materializer` и запускает `grape-materializer --root <base>`.
+   Перед изменениями materializer сверяет Git HEAD с `BASE_COMMIT` и
+   `client/config.json`, а также проверяет, что все submodules стоят на
+   закреплённых gitlink-коммитах.
 4. Materializer копирует `client/overlay/java` и `client/overlay/res` в чистый checkout,
    затем применяет проверяемые текстовые патчи к upstream-файлам.
 5. Перед Gradle выполняются проверки package name, label, launcher icon и конфигурации.
@@ -42,7 +45,10 @@
 - Gradle User Home кэшируется через `gradle/actions/setup-gradle`;
 - Cargo registry, git dependencies и build outputs кэшируются через
   `Swatinem/rust-cache`;
-- upstream checkout остаётся закреплённым по `BASE_COMMIT`;
+- upstream checkout остаётся закреплённым по `BASE_COMMIT`, включая проверку
+  HEAD и submodule gitlinks;
+- CMake/NDK build directories не восстанавливаются из общего кэша: их
+  абсолютные пути и toolchain cache-файлы могут стать несовместимыми;
 - Debug не собирается в Release workflow;
 - Release APK и AAB собираются одной командой:
 
@@ -51,10 +57,14 @@
   --no-daemon --stacktrace --warning-mode=all --build-cache
 ```
 
-Артефакты должны быть переименованы в `grapeGram-release.apk` и
-`grapeGram-release.aab`, загружены и проверены на наличие. Подпись использует
-`KEYSTORE_BASE64`, `KEYSTORE_PASS`, `ALIAS_NAME` и `ALIAS_PASS` из GitHub
-Secrets. Не помещать keystore или пароли в репозиторий.
+Артефакты должны иметь точные имена `grapeGram-release.apk` и
+`grapeGram-release.aab`. CI требует ровно один APK и один AAB, проверяет
+непустой размер, APK через `apksigner verify`, AAB через `jarsigner -verify`
+и наличие JAR signature block. Затем печатает SHA-256 обоих файлов.
+Подпись использует `KEYSTORE_BASE64`, `KEYSTORE_PASS`, `ALIAS_NAME` и
+`ALIAS_PASS` из GitHub Secrets; отсутствие любого секрета останавливает
+сборку вместо fallback на debug keystore. Не помещать keystore или пароли
+в репозиторий.
 
 ### Debug APK
 
@@ -96,7 +106,9 @@ cd /path/to/base
 - проверку overlay и identity patches;
 - Python unit tests и Ed25519 signatures;
 - Release APK и AAB, их подписи и ненулевой размер;
-- warning report, а не только общий статус Gradle;
+- warning report с количеством строк и уникальных предупреждений, файлом,
+  строкой, категорией, источником и статусом; отчёт публикуется отдельным
+  artifact вместе с полным Gradle log;
 - установку APK на реальном устройстве и ручную проверку навигации.
 
 Успешные Rust/data jobs не означают, что Android APK/AAB собраны. Аналогично,
