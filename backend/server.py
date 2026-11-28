@@ -287,11 +287,34 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _body(self):
-        if int(self.headers.get("Content-Length", "0")) > MAX_BODY:
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            raise ValueError("invalid content length")
+        if length < 0 or length > MAX_BODY:
             raise ValueError("request body too large")
         if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
             raise ValueError("application/json required")
-        return json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}")
+        value = json.loads(self.rfile.read(length) or b"{}")
+        if not isinstance(value, dict):
+            raise ValueError("JSON object required")
+        return value
+
+    _challenge_lock = threading.Lock()
+    _challenge_requests = {}
+
+    def _allow_challenge(self):
+        ip = self.client_address[0]
+        now = time.time()
+        with self._challenge_lock:
+            recent = [t for t in self._challenge_requests.get(ip, [])
+                      if now - t < 60]
+            if len(recent) >= 10:
+                self._challenge_requests[ip] = recent
+                return False
+            recent.append(now)
+            self._challenge_requests[ip] = recent
+            return True
 
     def _auth(self):
         header = self.headers.get("Authorization", "")
@@ -324,6 +347,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             body = self._body()
             if self.path == "/challenge":
+                if not self._allow_challenge():
+                    return self._json(429, {"error": "too many challenges; wait one minute"})
                 return self._json(200, {"code": STORE.new_challenge(),
                                         "expires_in": CHALLENGE_TTL,
                                         "instruction": "Send /bind CODE to the grapeGram bot"})
