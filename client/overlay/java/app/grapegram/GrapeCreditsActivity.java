@@ -137,7 +137,7 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
                             R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
                     if (position == licenseRow) {
                         cell.setText("Лицензии проектов: grapeGram, exteraGram и exteraless — GNU GPL-3.0; "
-                                + "Cherrygram — GNU GPL-2.0-or-later. "
+                                + "Cherrygram — GNU GPL-2.0. "
                                 + "Иконки и компоненты сохраняют условия и авторские сведения исходных проектов. "
                                 + "Upstream-проекты не поддерживают grapeGram и не связаны с ним.");
                     }
