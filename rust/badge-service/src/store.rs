@@ -5,12 +5,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use base64::Engine as _;
 use serde_json::{json, Value};
 
 use crate::canonical::{json_line, pretty_bytes};
-use crate::crypto::{sign, signing_key_from_env};
+use crate::crypto::{sign, signing_key_from_env, verify, verifying_key_from_pem};
 use crate::error::{bad_request, forbidden, internal, ApiError};
 
 const ALLOWED_BADGES: [&str; 4] = ["grapegram", "founder", "developer", "contributor"];
@@ -20,6 +20,8 @@ const SESSION_TTL: f64 = 3600.0;
 struct Challenge {
     expires: f64,
     used: bool,
+    poll_token: String,
+    session: Option<String>,
 }
 
 struct Session {
@@ -35,6 +37,7 @@ struct Inner {
 pub struct Store {
     data_dir: PathBuf,
     inner: Mutex<Inner>,
+    mutation: Mutex<()>,
 }
 
 fn now_seconds() -> f64 {
@@ -62,6 +65,56 @@ fn random_token() -> Result<String, ApiError> {
 
 fn id_is_valid(id: &str) -> bool {
     (5..=20).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn validate_style(style: &Value) -> Result<Value, ApiError> {
+    let object = style
+        .as_object()
+        .ok_or_else(|| bad_request("style must be an object"))?;
+    let mut clean = serde_json::Map::new();
+    for (key, value) in object {
+        match key.as_str() {
+            "color_light" | "color_dark" => {
+                let color = value
+                    .as_str()
+                    .ok_or_else(|| bad_request("badge color must be a string"))?;
+                let bytes = color.as_bytes();
+                if (bytes.len() != 7 && bytes.len() != 9)
+                    || bytes.first() != Some(&b'#')
+                    || !bytes[1..].iter().all(u8::is_ascii_hexdigit)
+                {
+                    return Err(bad_request("invalid badge color: expected #RRGGBB or #AARRGGBB"));
+                }
+                clean.insert(key.clone(), Value::String(color.to_ascii_uppercase()));
+            }
+            "alpha" => {
+                let alpha = value
+                    .as_f64()
+                    .ok_or_else(|| bad_request("alpha must be a number between 0 and 1"))?;
+                if !(0.0..=1.0).contains(&alpha) {
+                    return Err(bad_request("alpha must be a number between 0 and 1"));
+                }
+                clean.insert(key.clone(), json!(alpha));
+            }
+            "particles" => {
+                let particles = value
+                    .as_bool()
+                    .ok_or_else(|| bad_request("particles must be boolean"))?;
+                clean.insert(key.clone(), Value::Bool(particles));
+            }
+            "animation" => {
+                let animation = value
+                    .as_str()
+                    .ok_or_else(|| bad_request("animation must be a string"))?;
+                if !["none", "pulse", "sparkle", "glow"].contains(&animation) {
+                    return Err(bad_request("unknown badge animation"));
+                }
+                clean.insert(key.clone(), Value::String(animation.to_string()));
+            }
+            _ => return Err(bad_request("unknown badge style field")),
+        }
+    }
+    Ok(Value::Object(clean))
 }
 
 fn timestamp() -> String {
@@ -96,6 +149,7 @@ impl Store {
                 challenges: HashMap::new(),
                 sessions: HashMap::new(),
             }),
+            mutation: Mutex::new(()),
         }
     }
 
@@ -109,21 +163,45 @@ impl Store {
             .map_err(|_| internal("store lock is poisoned"))
     }
 
+    fn read_verified_data(&self, name: &str) -> Result<Vec<u8>, ApiError> {
+        let payload = fs::read(self.data_dir.join(name))?;
+        let signature_name = format!("{name}.sig");
+        let signature = fs::read_to_string(self.data_dir.join("signatures").join(signature_name))?;
+        let public_key = fs::read_to_string(
+            self.data_dir.join("keys/grapegram_ed25519.pub.pem"),
+        )?;
+        let key = verifying_key_from_pem(&public_key)?;
+        verify(&payload, &signature, &key)
+            .map_err(|_| internal("signed data file signature is invalid"))?;
+        Ok(payload)
+    }
+
     pub fn owners(&self) -> Result<Vec<String>, ApiError> {
-        let path = self.data_dir.join("owner_users.json");
-        let doc: Value = serde_json::from_slice(&fs::read(path)?)?;
+        let payload = self.read_verified_data("owner_users.json")?;
+        let doc: Value = serde_json::from_slice(&payload)?;
         let owners = doc
             .get("owners")
             .and_then(Value::as_array)
             .ok_or_else(|| internal("owner_users.json has no owners array"))?;
-        Ok(owners
-            .iter()
-            .filter_map(|value| value.as_str().map(str::to_string))
-            .collect())
+        let mut result = Vec::with_capacity(owners.len());
+        for value in owners {
+            let id = value.as_str()
+                .ok_or_else(|| internal("owner ID must be a string"))?;
+            if !id_is_valid(id) {
+                return Err(internal("owner allowlist contains an invalid Telegram ID"));
+            }
+            result.push(id.to_string());
+        }
+        Ok(result)
     }
 
     pub fn new_challenge(&self) -> Result<String, ApiError> {
+        self.new_challenge_pair().map(|(code, _)| code)
+    }
+
+    pub fn new_challenge_pair(&self) -> Result<(String, String), ApiError> {
         let code = random_hex(4)?;
+        let poll_token = random_token()?;
         let mut inner = self.lock()?;
         let now = now_seconds();
         inner.challenges.retain(|_, value| value.expires > now);
@@ -132,9 +210,11 @@ impl Store {
             Challenge {
                 expires: now + CHALLENGE_TTL,
                 used: false,
+                poll_token: poll_token.clone(),
+                session: None,
             },
         );
-        Ok(code)
+        Ok((code, poll_token))
     }
 
     pub fn bind(&self, code: &str, telegram_id: &str) -> Result<String, ApiError> {
@@ -153,6 +233,7 @@ impl Store {
             return Err(forbidden("not an owner"));
         }
         challenge.used = true;
+        challenge.session = Some(token.clone());
         inner.sessions.insert(
             token.clone(),
             Session {
@@ -161,6 +242,22 @@ impl Store {
             },
         );
         Ok(token)
+    }
+
+    pub fn poll_challenge(&self, code: &str, poll_token: &str) -> Result<Option<String>, ApiError> {
+        let mut inner = self.lock()?;
+        let challenge = inner
+            .challenges
+            .get(code)
+            .ok_or_else(|| forbidden("challenge is invalid or expired"))?;
+        if challenge.expires < now_seconds() || challenge.poll_token != poll_token {
+            return Err(forbidden("challenge is invalid or expired"));
+        }
+        let session = challenge.session.clone();
+        if session.is_some() {
+            inner.challenges.remove(code);
+        }
+        Ok(session)
     }
 
     pub fn require_owner(&self, token: &str) -> Result<String, ApiError> {
@@ -186,7 +283,12 @@ impl Store {
         badge: &str,
         enabled: bool,
         reason: &str,
+        style: Option<&Value>,
     ) -> Result<u64, ApiError> {
+        let _mutation_guard = self
+            .mutation
+            .lock()
+            .map_err(|_| internal("badge mutation lock is poisoned"))?;
         let owner = self.require_owner(token)?;
         if !id_is_valid(target) {
             return Err(bad_request("bad user id"));
@@ -196,7 +298,8 @@ impl Store {
         }
 
         let path = self.data_dir.join("badge_users.json");
-        let mut doc: Value = serde_json::from_slice(&fs::read(&path)?)?;
+        let signed_payload = self.read_verified_data("badge_users.json")?;
+        let mut doc: Value = serde_json::from_slice(&signed_payload)?;
         let now = timestamp();
         let version = doc.get("version").and_then(Value::as_u64).unwrap_or(1) + 1;
 
@@ -220,6 +323,10 @@ impl Store {
         if enabled && !entry_object.contains_key("granted_at") {
             entry_object.insert("granted_at".to_string(), Value::String(now.clone()));
         }
+        if let Some(style) = style {
+            entry_object.insert("style".to_string(), validate_style(style)?);
+        }
+        let style_record = entry_object.get("style").cloned().unwrap_or_else(|| json!({}));
         badges
             .as_object_mut()
             .ok_or_else(|| internal("badges is not an object"))?
@@ -248,12 +355,13 @@ impl Store {
             "target": target,
             "badge": badge,
             "reason": reason,
+            "style": style_record,
             "version": version,
             "at": now
         }))?;
         crate::github::publish_if_configured(
             &self.data_dir,
-            &["badge_users.json", "signatures/badge_users.json.sig"],
+            &["signatures/badge_users.json.sig", "badge_users.json", "audit.jsonl"],
         );
         Ok(version)
     }
@@ -294,27 +402,63 @@ mod tests {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn test_store(name: &str) -> (Store, PathBuf) {
+        use ed25519_dalek::SigningKey;
         let suffix = COUNTER.fetch_add(1, Ordering::Relaxed);
         let directory = env::temp_dir().join(format!(
             "grape-badge-test-{}-{suffix}-{name}",
             process::id()
         ));
-        fs::create_dir_all(&directory).unwrap();
+        fs::create_dir_all(directory.join("signatures")).unwrap();
+        fs::create_dir_all(directory.join("keys")).unwrap();
+        let owner_payload = br#"{"version":1,"owners":["7293365262","960792706"]}"#;
+        let owner_key = SigningKey::from_bytes(&[0x37u8; 32]);
+        let signature = crate::crypto::sign(owner_payload, &owner_key);
+        fs::write(directory.join("owner_users.json"), owner_payload).unwrap();
         fs::write(
-            directory.join("owner_users.json"),
-            r#"{"version":1,"owners":["7293365262","960792706"]}"#,
-        )
-        .unwrap();
+            directory.join("signatures/owner_users.json.sig"),
+            format!("{signature}\n"),
+        ).unwrap();
+        let mut public_der = vec![0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00];
+        public_der.extend_from_slice(owner_key.verifying_key().as_bytes());
+        let public_pem = format!(
+            "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----\n",
+            STANDARD.encode(public_der)
+        );
+        fs::write(directory.join("keys/grapegram_ed25519.pub.pem"), public_pem).unwrap();
+        let badge_payload = br#"{"version":1,"updated_at":"2026-01-01T00:00:00Z","badges":{}}"#;
+        let badge_signature = crate::crypto::sign(badge_payload, &owner_key);
+        fs::write(directory.join("badge_users.json"), badge_payload).unwrap();
         fs::write(
-            directory.join("badge_users.json"),
-            r#"{"version":1,"updated_at":"2026-01-01T00:00:00Z","badges":{}}"#,
-        )
-        .unwrap();
+            directory.join("signatures/badge_users.json.sig"),
+            format!("{badge_signature}\n"),
+        ).unwrap();
         (Store::new(directory.clone()), directory)
     }
 
     fn cleanup(directory: &Path) {
         let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn badge_document_signature_is_required_before_mutation() {
+        let (store, directory) = test_store("badge-signature");
+        let path = directory.join("badge_users.json");
+        fs::write(&path, r#"{"version":1,"updated_at":"2026-01-01T00:00:00Z","badges":{"111111111":{"badge":"founder","enabled":true,"record_version":1}}}"#).unwrap();
+        let code = store.new_challenge().unwrap();
+        let session = store.bind(&code, "7293365262").unwrap();
+        let result = store.mutate(&session, "555555555", "grapegram", true, "", None);
+        assert!(result.is_err());
+        cleanup(&directory);
+    }
+
+    #[test]
+    fn owner_allowlist_signature_is_required() {
+        let (store, directory) = test_store("owner-signature");
+        assert_eq!(store.owners().unwrap(), vec!["7293365262", "960792706"]);
+        fs::write(directory.join("owner_users.json"),
+            r#"{"version":1,"owners":["111111111"]}"#).unwrap();
+        assert!(store.owners().is_err());
+        cleanup(&directory);
     }
 
     #[test]
@@ -325,6 +469,24 @@ mod tests {
         assert!(store.bind(&code, "7293365262").is_ok());
         let second = store.bind(&code, "7293365262");
         assert!(matches!(second, Err(ApiError::Forbidden(_))));
+        cleanup(&directory);
+    }
+
+    #[test]
+    fn app_can_poll_owner_binding_without_exposing_session() {
+        let (store, directory) = test_store("poll-binding");
+        let (code, poll_token) = store.new_challenge_pair().unwrap();
+        assert_eq!(store.poll_challenge(&code, &poll_token).unwrap(), None);
+        assert!(matches!(
+            store.poll_challenge(&code, "wrong-token"),
+            Err(ApiError::Forbidden(_))
+        ));
+        let session = store.bind(&code, "960792706").unwrap();
+        assert_eq!(store.poll_challenge(&code, &poll_token).unwrap(), Some(session));
+        assert!(matches!(
+            store.poll_challenge(&code, &poll_token),
+            Err(ApiError::Forbidden(_))
+        ));
         cleanup(&directory);
     }
 
@@ -369,6 +531,61 @@ mod tests {
     }
 
     #[test]
+    fn mutate_validates_and_persists_badge_style() {
+        let previous_key = env::var("GRP_SIGNING_KEY_PEM").ok();
+        let mut der = vec![
+            0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22,
+            0x04, 0x20,
+        ];
+        der.extend_from_slice(&[0x11u8; 32]);
+        let test_pem = format!(
+            "-----BEGIN PRIVATE KEY-----\\n{}\\n-----END PRIVATE KEY-----",
+            base64::engine::general_purpose::STANDARD.encode(der)
+        );
+        env::set_var("GRP_SIGNING_KEY_PEM", test_pem);
+        let (store, directory) = test_store("style");
+        {
+            let mut inner = store.lock().unwrap();
+            inner.sessions.insert(
+                "session".to_string(),
+                Session {
+                    owner: "7293365262".to_string(),
+                    expires: now_seconds() + SESSION_TTL,
+                },
+            );
+        }
+        let style = json!({
+            "color_light": "#AA22CC",
+            "color_dark": "#FF112233",
+            "alpha": 0.75,
+            "particles": true,
+            "animation": "sparkle"
+        });
+        store.mutate("session", "555555555", "founder", true, "style", Some(&style)).unwrap();
+        let doc: Value = serde_json::from_slice(&fs::read(directory.join("badge_users.json")).unwrap()).unwrap();
+        assert_eq!(doc["badges"]["555555555"]["style"]["color_light"], "#AA22CC");
+        assert_eq!(doc["badges"]["555555555"]["style"]["animation"], "sparkle");
+        assert!(matches!(
+            validate_style(&json!({"color_light": "purple"})),
+            Err(ApiError::BadRequest(_))
+        ));
+        assert!(matches!(
+            validate_style(&json!({"alpha": 2.0})),
+            Err(ApiError::BadRequest(_))
+        ));
+        assert!(matches!(
+            validate_style(&json!({"animation": "explode"})),
+            Err(ApiError::BadRequest(_))
+        ));
+        cleanup(&directory);
+        if let Some(value) = previous_key {
+            env::set_var("GRP_SIGNING_KEY_PEM", value);
+        } else {
+            env::remove_var("GRP_SIGNING_KEY_PEM");
+        }
+    }
+
+    #[test]
     fn mutate_validates_target_and_badge() {
         let (store, directory) = test_store("validation");
         {
@@ -382,15 +599,15 @@ mod tests {
             );
         }
         assert!(matches!(
-            store.mutate("session", "123", "grapegram", true, ""),
+            store.mutate("session", "123", "grapegram", true, "", None),
             Err(ApiError::BadRequest(_))
         ));
         assert!(matches!(
-            store.mutate("session", "1234567", "unknown", true, ""),
+            store.mutate("session", "1234567", "unknown", true, "", None),
             Err(ApiError::BadRequest(_))
         ));
         assert!(matches!(
-            store.mutate("other", "1234567", "grapegram", true, ""),
+            store.mutate("other", "1234567", "grapegram", true, "", None),
             Err(ApiError::Forbidden(_))
         ));
         cleanup(&directory);

@@ -89,6 +89,14 @@ class DataTests(unittest.TestCase):
             self.assertIsInstance(rec["enabled"], bool)
             self.assertGreaterEqual(rec["record_version"], 1)
 
+    def test_badge_schema_allows_monotonic_versions(self):
+        with open(os.path.join(ROOT, "data", "schemas", "badge_users.schema.json"),
+                  encoding="utf-8") as f:
+            schema = json.load(f)
+        version = schema["properties"]["version"]
+        self.assertEqual(version.get("minimum"), 1)
+        self.assertNotIn("const", version)
+
     def test_canonical_is_order_independent(self):
         a = {"b": 1, "a": {"y": 2, "x": [1, 2]}}
         b = {"a": {"x": [1, 2], "y": 2}, "b": 1}
@@ -161,6 +169,12 @@ class StoreTests(unittest.TestCase):
         os.makedirs(self.data)
         for n in ("badge_users.json", "owner_users.json"):
             shutil.copy(os.path.join(ROOT, "data", n), self.data)
+        os.makedirs(os.path.join(self.data, "signatures"), exist_ok=True)
+        shutil.copy(os.path.join(ROOT, "data", "signatures", "owner_users.json.sig"),
+                    os.path.join(self.data, "signatures", "owner_users.json.sig"))
+        os.makedirs(os.path.join(self.data, "keys"), exist_ok=True)
+        shutil.copy(os.path.join(ROOT, "data", "keys", "grapegram_ed25519.pub.pem"),
+                    os.path.join(self.data, "keys", "grapegram_ed25519.pub.pem"))
         self.priv, self.pub = make_key(self.tmp)
         os.environ["GRP_SIGNING_KEY_FILE"] = self.priv
         self.store = server.Store(self.data)
@@ -181,6 +195,17 @@ class StoreTests(unittest.TestCase):
         self.store.challenges[code]["expires"] = time.time() - 1
         with self.assertRaises(PermissionError):
             self.store.bind(code, OWNERS[0])
+
+    def test_app_can_poll_owner_binding_without_exposing_session(self):
+        code, poll_token = self.store.new_challenge_pair()
+        self.assertIsNone(self.store.poll_challenge(code, poll_token))
+        with self.assertRaises(PermissionError):
+            self.store.poll_challenge(code, "wrong-token")
+        session = self.store.bind(code, OWNERS[1])
+        self.assertEqual(self.store.poll_challenge(code, poll_token), session)
+        with self.assertRaises(PermissionError):
+            self.store.poll_challenge(code, poll_token)
+
 
     def test_non_owner_cannot_bind(self):
         code = self.store.new_challenge()
@@ -212,6 +237,39 @@ class StoreTests(unittest.TestCase):
         token = self.store.bind(code, OWNERS[1])
         doc = self.store.mutate(token, OWNERS[0], "grapegram", False, "revoked")
         self.assertFalse(doc["badges"][OWNERS[0]]["enabled"])
+
+    def test_badge_style_is_validated_persisted_and_audited(self):
+        code = self.store.new_challenge()
+        token = self.store.bind(code, OWNERS[0])
+        style = {
+            "color_light": "#AA22CC",
+            "color_dark": "#FF112233",
+            "alpha": 0.75,
+            "particles": True,
+            "animation": "sparkle",
+        }
+        doc = self.store.mutate(token, "555555555", "founder", True,
+                                "style test", style=style)
+        self.assertEqual(doc["badges"]["555555555"]["style"], {
+            "color_light": "#AA22CC",
+            "color_dark": "#FF112233",
+            "alpha": 0.75,
+            "particles": True,
+            "animation": "sparkle",
+        })
+        with open(os.path.join(self.data, "audit.jsonl"), encoding="utf-8") as f:
+            rec = json.loads(f.readline())
+        self.assertEqual(rec["style"]["animation"], "sparkle")
+
+    def test_invalid_badge_style_rejected(self):
+        with self.assertRaises(ValueError):
+            server.validate_badge_style({"color_light": "purple"})
+        with self.assertRaises(ValueError):
+            server.validate_badge_style({"alpha": 1.5})
+        with self.assertRaises(ValueError):
+            server.validate_badge_style({"animation": "explode"})
+        with self.assertRaises(ValueError):
+            server.validate_badge_style({"particles": "yes"})
 
     def test_bad_badge_rejected(self):
         code = self.store.new_challenge()
@@ -275,6 +333,22 @@ class IconTests(unittest.TestCase):
             out += line
             prev = line
         return w, h, out
+
+    def test_upstream_icon_catalog_is_complete_and_unique(self):
+        with open(os.path.join(ROOT, "assets", "icons", "upstream_catalog.json"),
+                  encoding="utf-8") as f:
+            catalog = json.load(f)
+        self.assertEqual(len(catalog["icons"]), 49)
+        ids = [(item["source"], item["id"]) for item in catalog["icons"]]
+        self.assertEqual(len(ids), len(set(ids)))
+        names = [item["name"] for item in catalog["icons"]]
+        self.assertEqual(len(names), len(set(names)))
+        self.assertEqual(sum(item["source"] == "Cherrygram" for item in catalog["icons"]), 18)
+        self.assertEqual(sum(item["source"] == "exteraGram" for item in catalog["icons"]), 31)
+        self.assertEqual(catalog["sources"]["Cherrygram"]["commit"],
+                         "9e1c901e6fbca5a9a346683b91c6d529376f5304")
+        self.assertEqual(catalog["sources"]["exteraGram"]["commit"],
+                         "b4d852f48f2734a0bee1a74a0939be621612262a")
 
     def test_nine_icons_named(self):
         with open(os.path.join(ROOT, "assets", "icons", "icons.json")) as f:

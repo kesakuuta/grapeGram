@@ -3,14 +3,9 @@ package app.grapegram;
 import android.content.Context;
 import android.view.View;
 import android.widget.FrameLayout;
-import android.widget.Toast;
 
-import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
-import org.telegram.messenger.Utilities;
 import org.telegram.ui.ActionBar.ActionBar;
-import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.IconBackgroundColors;
@@ -27,6 +22,8 @@ import app.exteraless.plugins.ui.PluginsActivity;
 import app.exteraless.settings.OpenExteraAppearanceActivity;
 import app.exteraless.settings.OpenExteraAyuMomentsActivity;
 import app.exteraless.settings.OpenExteraChatsActivity;
+import app.exteraless.settings.OpenExteraGeneralActivity;
+import app.exteraless.settings.OpenExteraOtherActivity;
 
 /** The single grapeGram settings hub, built from Telegram's own settings cells. */
 public class GrapeSettingsActivity extends BaseFragment {
@@ -38,6 +35,8 @@ public class GrapeSettingsActivity extends BaseFragment {
     private static final int ID_PLUGINS = 5;
     private static final int ID_BADGES = 6;
     private static final int ID_CREDITS = 7;
+    private static final int ID_GENERAL = 8;
+    private static final int ID_OTHER = 9;
 
     private UniversalRecyclerView listView;
 
@@ -75,8 +74,13 @@ public class GrapeSettingsActivity extends BaseFragment {
         items.add(UItem.asHeader("grapeGram " + GrapeConfig.VERSION));
         items.add(UItem.asShadow(null));
 
+        items.add(UItem.asHeader("Основные"));
+        items.add(row(ID_GENERAL, IconBackgroundColors.PURPLE, R.drawable.settings_account,
+                "Общие", "язык, поведение и основные параметры"));
+        items.add(UItem.asShadow(null));
+
         items.add(UItem.asHeader("Внешний вид"));
-        items.add(row(ID_APPEARANCE, IconBackgroundColors.PURPLE, R.drawable.settings_account,
+        items.add(row(ID_APPEARANCE, IconBackgroundColors.PURPLE, R.drawable.settings_features,
                 "Оформление", "темы, анимации, Monet"));
         items.add(row(ID_CHATS, IconBackgroundColors.BLUE, R.drawable.settings_chat,
                 "Чаты", "сообщения, папки, иконка приложения"));
@@ -89,6 +93,8 @@ public class GrapeSettingsActivity extends BaseFragment {
                 "AI", "провайдеры и модели"));
         items.add(row(ID_PLUGINS, IconBackgroundColors.GREEN, R.drawable.settings_premium,
                 "Плагины", "установка, разрешения, исходники, AI-анализ, журнал"));
+        items.add(row(ID_OTHER, IconBackgroundColors.ORANGE, R.drawable.settings_power,
+                "Другие", "дополнительные функции клиента"));
         items.add(UItem.asShadow(null));
 
         items.add(UItem.asHeader("О приложении"));
@@ -104,6 +110,9 @@ public class GrapeSettingsActivity extends BaseFragment {
 
     private void onClick(UItem item, View view, int position, float x, float y) {
         switch (item.id) {
+            case ID_GENERAL:
+                presentFragment(new OpenExteraGeneralActivity());
+                break;
             case ID_APPEARANCE:
                 presentFragment(new OpenExteraAppearanceActivity());
                 break;
@@ -120,7 +129,10 @@ public class GrapeSettingsActivity extends BaseFragment {
                 presentFragment(new PluginsActivity());
                 break;
             case ID_BADGES:
-                showBadges();
+                presentFragment(new GrapeBadgesActivity());
+                break;
+            case ID_OTHER:
+                presentFragment(new OpenExteraOtherActivity());
                 break;
             case ID_CREDITS:
                 presentFragment(new GrapeCreditsActivity());
@@ -130,47 +142,4 @@ public class GrapeSettingsActivity extends BaseFragment {
         }
     }
 
-    private void showBadges() {
-        final Context context = getParentActivity();
-        if (context == null) {
-            return;
-        }
-        final AlertDialog progress = new AlertDialog(context, AlertDialog.ALERT_TYPE_SPINNER);
-        progress.setCanCancel(true);
-        progress.show();
-        Utilities.globalQueue.postRunnable(() -> {
-            final GrapeBadges.Result result = GrapeBadges.load(context.getApplicationContext(), true);
-            AndroidUtilities.runOnUIThread(() -> {
-                try {
-                    progress.dismiss();
-                } catch (Throwable ignored) {
-                }
-                if (!result.ok) {
-                    toast("Бейджи: " + result.error);
-                    return;
-                }
-                GrapeBadgeBridge.syncAsync(context.getApplicationContext());
-                StringBuilder sb = new StringBuilder();
-                for (GrapeBadges.Entry e : result.entries) {
-                    if (e.enabled) {
-                        sb.append(e.userId).append(" — ").append(e.badge).append('\n');
-                    }
-                }
-                if (sb.length() == 0) {
-                    sb.append("Пока никому не выданы");
-                }
-                new AlertDialog.Builder(context)
-                        .setTitle("Бейджи · v" + result.version)
-                        .setMessage(sb.toString().trim())
-                        .setPositiveButton(LocaleController.getString(R.string.OK), null)
-                        .show();
-            });
-        });
-    }
-
-    private void toast(String text) {
-        if (getParentActivity() != null) {
-            Toast.makeText(getParentActivity(), text, Toast.LENGTH_SHORT).show();
-        }
-    }
 }

@@ -29,9 +29,10 @@ cargo run --release
 | Route | Auth | Result |
 |---|---|---|
 | `GET /healthz` | none | `{"ok": true}` |
-| `GET /data/<file>` | none | Raw `data/<file>` or `data/signatures/<file>`; only `.json` and `.sig` basenames. |
-| `POST /challenge` | none | `{"code": "...", "expires_in": 300}`, one-time, TTL 300 s. |
-| `POST /telegram/webhook` | `X-Telegram-Bot-Api-Secret-Token` | Parses `message.text` of the form `/bind CODE`, reads `message.from.id`, binds the session and returns `{"ok": true, "session": "..."}`. Other messages are ignored with `{"ok": true}`. |
+| `GET /data/<file>` | none | Public signed JSON and signature files; only supported data basenames. |
+| `GET /data/audit.jsonl` | owner session | Audit history; requires `Authorization: Bearer <session>`. |
+| `POST /challenge` | none | Returns a one-time code and an independent 256-bit poll token, TTL 300 s. |
+| `POST /challenge/status` | poll token | Returns `pending` until the owner binds; then returns the session once to the app holding the poll token. |\n| `POST /telegram/webhook` | `X-Telegram-Bot-Api-Secret-Token` | Parses `/bind CODE`, reads `message.from.id`, and binds the session. The app retrieves it separately through its poll token. |
 | `POST /admin/grant`, `POST /admin/revoke` | `Authorization: Bearer <session>` | Validates `user_id` and `badge`, updates `badge_users.json`, re-signs it, appends `audit.jsonl`, publishes if configured, returns `{"ok": true, "version": N}`. |
 
 ## Security notes

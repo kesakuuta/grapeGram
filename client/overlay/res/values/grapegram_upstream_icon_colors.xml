@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_background">#E83030</color>
+    <color name="ic_background_sus">#FFDE2A</color>
+    <color name="ic_background_cyberpunk">#0C0E15</color>
+    <color name="ic_background_monet">#E83030</color>
+    <color name="ic_foreground_monet">#505050</color>
+    <color name="white">#FFFFFF</color>
+</resources>

@@ -27,6 +27,9 @@ import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.error import HTTPError
+from urllib.parse import quote
+from urllib.request import Request, urlopen
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(ROOT, "data")
@@ -35,8 +38,11 @@ KEY_DIR = os.path.join(DATA_DIR, "keys")
 
 ALLOWED_BADGES = {"grapegram", "founder", "developer", "contributor"}
 ID_RE = re.compile(r"^[0-9]{5,20}$")
+HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$")
+BADGE_ANIMATIONS = {"none", "pulse", "sparkle", "glow"}
 CHALLENGE_TTL = 300
 SESSION_TTL = 3600
+MAX_BODY = 1_048_576
 
 
 def canonical_bytes(obj) -> bytes:
@@ -56,6 +62,36 @@ def _write_atomic(path, obj):
         f.write("\n")
     os.replace(tmp, path)
 
+def validate_badge_style(style):
+    if style is None:
+        return None
+    if not isinstance(style, dict):
+        raise ValueError("style must be an object")
+    allowed = {"color_light", "color_dark", "alpha", "particles", "animation"}
+    if set(style) - allowed:
+        raise ValueError("unknown style field")
+    clean = {}
+    for key in ("color_light", "color_dark"):
+        if key in style:
+            value = style[key]
+            if not isinstance(value, str) or not HEX_COLOR_RE.fullmatch(value):
+                raise ValueError("invalid " + key + ": expected #RRGGBB or #AARRGGBB")
+            clean[key] = value.upper()
+    if "alpha" in style:
+        value = style["alpha"]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+            raise ValueError("alpha must be between 0 and 1")
+        clean["alpha"] = float(value)
+    if "particles" in style:
+        if not isinstance(style["particles"], bool):
+            raise ValueError("particles must be boolean")
+        clean["particles"] = style["particles"]
+    if "animation" in style:
+        if style["animation"] not in BADGE_ANIMATIONS:
+            raise ValueError("unknown badge animation")
+        clean["animation"] = style["animation"]
+    return clean
+
 
 def _sign(payload: bytes, key_pem: bytes) -> bytes:
     with tempfile.NamedTemporaryFile(delete=False) as kf:
@@ -74,6 +110,31 @@ def _sign(payload: bytes, key_pem: bytes) -> bytes:
         os.unlink(data_path)
 
 
+def _verify(payload: bytes, signature_text: bytes, public_key_path: str) -> bool:
+    try:
+        signature = base64.b64decode(signature_text.strip(), validate=True)
+    except Exception:
+        return False
+    data_file = signature_file = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(payload)
+            data_file = f.name
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            f.write(signature)
+            signature_file = f.name
+        result = subprocess.run(
+            ["openssl", "pkeyutl", "-verify", "-pubin", "-inkey", public_key_path,
+             "-rawin", "-in", data_file, "-sigfile", signature_file],
+            capture_output=True,
+        )
+        return result.returncode == 0
+    finally:
+        for temp_path in (data_file, signature_file):
+            if temp_path and os.path.exists(temp_path):
+                os.unlink(temp_path)
+
+
 def signing_key() -> bytes:
     pem = os.environ.get("GRP_SIGNING_KEY_PEM")
     if pem:
@@ -89,22 +150,38 @@ class Store:
     def __init__(self, data_dir: str):
         self.data_dir = data_dir
         self.lock = threading.Lock()
+        self.mutation_lock = threading.Lock()
         self.challenges = {}
         self.sessions = {}
         self.audit_path = os.path.join(data_dir, "audit.jsonl")
 
     def owners(self):
-        return _load(os.path.join(self.data_dir, "owner_users.json"))["owners"]
+        path = os.path.join(self.data_dir, "owner_users.json")
+        signature_path = os.path.join(self.data_dir, "signatures", "owner_users.json.sig")
+        public_key = os.path.join(self.data_dir, "keys", "grapegram_ed25519.pub.pem")
+        with open(path, "rb") as f:
+            payload = f.read()
+        with open(signature_path, "rb") as f:
+            signature = f.read()
+        if not _verify(payload, signature, public_key):
+            raise PermissionError("owner allowlist signature is invalid")
+        return json.loads(payload)["owners"]
 
     def new_challenge(self) -> str:
+        code, _ = self.new_challenge_pair()
+        return code
+
+    def new_challenge_pair(self):
         code = secrets.token_hex(4).upper()
+        poll_token = secrets.token_urlsafe(32)
         with self.lock:
             now = time.time()
             self.challenges = {c: v for c, v in self.challenges.items()
                                if v["expires"] > now}
             self.challenges[code] = {"expires": now + CHALLENGE_TTL,
+                                     "poll_token": poll_token,
                                      "session": None, "used": False}
-        return code
+        return code, poll_token
 
     def bind(self, code: str, telegram_id: str):
         with self.lock:
@@ -117,6 +194,20 @@ class Store:
             token = secrets.token_urlsafe(32)
             self.sessions[token] = {"owner": str(telegram_id),
                                     "expires": time.time() + SESSION_TTL}
+            ch["session"] = token
+            return token
+
+    def poll_challenge(self, code: str, poll_token: str):
+        with self.lock:
+            ch = self.challenges.get(code)
+            if not ch or ch["expires"] < time.time():
+                raise PermissionError("challenge is invalid or expired")
+            if not secrets.compare_digest(ch["poll_token"], str(poll_token)):
+                raise PermissionError("invalid challenge poll token")
+            if not ch["session"]:
+                return None
+            token = ch["session"]
+            del self.challenges[code]
             return token
 
     def require_owner(self, token: str) -> str:
@@ -128,12 +219,20 @@ class Store:
         return s["owner"]
 
     def mutate(self, token: str, target: str, badge: str, enabled: bool,
-               reason: str = ""):
+               reason: str = "", style=None):
+        with self.mutation_lock:
+            return self._mutate_locked(token, target, badge, enabled, reason, style)
+
+    def _mutate_locked(self, token: str, target: str, badge: str, enabled: bool,
+                       reason: str = "", style=None):
         owner = self.require_owner(token)
         if not ID_RE.match(str(target)):
             raise ValueError("bad user id")
         if badge not in ALLOWED_BADGES:
             raise ValueError("unknown badge")
+        # The container filesystem may be ephemeral. Always start from the
+        # latest signed repository state before applying another mutation.
+        self._pull_github()
         path = os.path.join(self.data_dir, "badge_users.json")
         doc = _load(path)
         now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -141,6 +240,8 @@ class Store:
         entry.update({"badge": badge, "enabled": bool(enabled),
                       "updated_at": now,
                       "record_version": int(entry.get("record_version", 0)) + 1})
+        if style is not None:
+            entry["style"] = validate_badge_style(style)
         if enabled and "granted_at" not in entry:
             entry["granted_at"] = now
         doc["badges"][target] = entry
@@ -155,8 +256,179 @@ class Store:
             f.write(base64.b64encode(sig).decode("ascii") + "\n")
         self._audit({"action": "grant" if enabled else "revoke",
                      "by": owner, "target": target, "badge": badge,
-                     "reason": reason, "version": doc["version"], "at": now})
+                     "reason": reason, "style": entry.get("style", {}),
+                     "version": doc["version"], "at": now})
+        # The Android client reads public signed files from GitHub raw URLs.
+        # Publish the signed document and audit log in one Git commit so no
+        # client or data-verification run can observe a mismatched pair.
+        doc["_published"] = self._publish_github()
         return doc
+
+    def _pull_github(self):
+        token = os.environ.get("GRP_GITHUB_TOKEN", "").strip()
+        repo = os.environ.get("GRP_GITHUB_REPO", "").strip()
+        if not token or not repo:
+            return
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+            raise ValueError("invalid GRP_GITHUB_REPO")
+        branch = os.environ.get("GRP_GITHUB_BRANCH", "main").strip() or "main"
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": "Bearer " + token,
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "grapeGram-badge-service",
+        }
+
+        ref_endpoint = "https://api.github.com/repos/{}/git/ref/heads/{}".format(
+            repo, quote(branch, safe="/"))
+        ref_request = Request(ref_endpoint, headers=headers, method="GET")
+        with urlopen(ref_request, timeout=30) as response:
+            snapshot = json.loads(response.read().decode("utf-8"))["object"]["sha"]
+
+        def read_content(name):
+            endpoint = "https://api.github.com/repos/{}/contents/data/{}".format(
+                repo, quote(name, safe="/"))
+            request = Request(endpoint + "?ref=" + quote(snapshot, safe=""),
+                              headers=headers, method="GET")
+            with urlopen(request, timeout=30) as response:
+                document = json.loads(response.read().decode("utf-8"))
+            if document.get("encoding") != "base64":
+                raise RuntimeError("GitHub returned an unsupported data encoding")
+            return base64.b64decode(document.get("content", ""))
+
+        data = read_content("badge_users.json")
+        signature_text = read_content("signatures/badge_users.json.sig")
+        public_key = os.path.join(self.data_dir, "keys", "grapegram_ed25519.pub.pem")
+        if not _verify(data, signature_text, public_key):
+            raise RuntimeError("remote badge data signature is invalid")
+
+        os.makedirs(os.path.join(self.data_dir, "signatures"), exist_ok=True)
+        for relative, payload in (
+            ("badge_users.json", data),
+            ("signatures/badge_users.json.sig", signature_text),
+        ):
+            destination = os.path.join(self.data_dir, relative)
+            fd, temp_path = tempfile.mkstemp(prefix=".badge-sync-", dir=os.path.dirname(destination))
+            try:
+                with os.fdopen(fd, "wb") as f:
+                    f.write(payload)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temp_path, destination)
+            finally:
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+
+    def read_audit(self):
+        with self.mutation_lock:
+            local_path = os.path.join(self.data_dir, "audit.jsonl")
+            local = open(local_path, "rb").read() if os.path.isfile(local_path) else b""
+            token = os.environ.get("GRP_GITHUB_TOKEN", "").strip()
+            repo = os.environ.get("GRP_GITHUB_REPO", "").strip()
+            if not token or not repo:
+                return local
+            branch = os.environ.get("GRP_GITHUB_BRANCH", "main").strip() or "main"
+            endpoint = "https://api.github.com/repos/{}/contents/data/audit.jsonl".format(repo)
+            request = Request(endpoint + "?ref=" + quote(branch, safe=""),
+                              headers={
+                                  "Accept": "application/vnd.github+json",
+                                  "Authorization": "Bearer " + token,
+                                  "X-GitHub-Api-Version": "2022-11-28",
+                                  "User-Agent": "grapeGram-badge-service",
+                              }, method="GET")
+            try:
+                with urlopen(request, timeout=30) as response:
+                    document = json.loads(response.read().decode("utf-8"))
+                remote = base64.b64decode(document.get("content", ""))
+            except HTTPError as error:
+                if error.code == 404:
+                    return local
+                raise
+            remote_lines = remote.splitlines()
+            known = set(remote_lines)
+            merged = remote_lines + [
+                line for line in local.splitlines() if line and line not in known
+            ]
+            data = b"\n".join(merged) + (b"\n" if merged else b"")
+            with open(local_path, "wb") as f:
+                f.write(data)
+            return data
+
+    def _publish_github(self):
+        token = os.environ.get("GRP_GITHUB_TOKEN", "").strip()
+        repo = os.environ.get("GRP_GITHUB_REPO", "").strip()
+        if not token or not repo:
+            return False
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+            raise ValueError("invalid GRP_GITHUB_REPO")
+        branch = os.environ.get("GRP_GITHUB_BRANCH", "main").strip() or "main"
+        base = "https://api.github.com/repos/" + repo
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": "Bearer " + token,
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "grapeGram-badge-service",
+        }
+
+        def api(method, path, payload=None):
+            data = None if payload is None else json.dumps(payload).encode("utf-8")
+            request = Request(base + path, data=data,
+                              headers={**headers, "Content-Type": "application/json"},
+                              method=method)
+            with urlopen(request, timeout=30) as response:
+                raw = response.read()
+                return json.loads(raw.decode("utf-8")) if raw else {}
+
+        # Merge the remote audit history first: Render's free container may have
+        # restarted and lost its ephemeral filesystem since the previous grant.
+        audit_path = os.path.join(self.data_dir, "audit.jsonl")
+        local_audit = open(audit_path, "rb").read() if os.path.isfile(audit_path) else b""
+        remote_audit = b""
+        try:
+            audit_doc = api("GET", "/contents/data/audit.jsonl?ref=" + quote(branch, safe=""))
+            remote_audit = base64.b64decode(audit_doc.get("content", ""))
+        except HTTPError as error:
+            if error.code != 404:
+                raise
+        remote_lines = remote_audit.splitlines()
+        known = set(remote_lines)
+        merged_lines = remote_lines + [
+            line for line in local_audit.splitlines() if line and line not in known
+        ]
+        merged_audit = b"\n".join(merged_lines) + (b"\n" if merged_lines else b"")
+        with open(audit_path, "wb") as f:
+            f.write(merged_audit)
+
+        # Create one Git commit containing the signature, JSON and audit log.
+        # This avoids transient invalid signature/data pairs and duplicate CI runs.
+        ref = api("GET", "/git/ref/heads/" + quote(branch, safe="/"))
+        parent_sha = ref["object"]["sha"]
+        parent = api("GET", "/git/commits/" + parent_sha)
+        tree_entries = []
+        for name in ("badge_users.json", "signatures/badge_users.json.sig", "audit.jsonl"):
+            with open(os.path.join(self.data_dir, name), "rb") as f:
+                encoded = base64.b64encode(f.read()).decode("ascii")
+            blob = api("POST", "/git/blobs", {"content": encoded, "encoding": "base64"})
+            tree_entries.append({
+                "path": "data/" + name,
+                "mode": "100644",
+                "type": "blob",
+                "sha": blob["sha"],
+            })
+        tree = api("POST", "/git/trees", {
+            "base_tree": parent["tree"]["sha"],
+            "tree": tree_entries,
+        })
+        commit = api("POST", "/git/commits", {
+            "message": "badge service: publish signed badge assignments",
+            "tree": tree["sha"],
+            "parents": [parent_sha],
+        })
+        api("PATCH", "/git/refs/heads/" + quote(branch, safe="/"), {
+            "sha": commit["sha"],
+            "force": False,
+        })
+        return True
 
     def _audit(self, rec):
         with open(self.audit_path, "a", encoding="utf-8") as f:
@@ -179,6 +451,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def _body(self):
         n = int(self.headers.get("Content-Length", "0"))
+        if n < 0 or n > MAX_BODY:
+            raise ValueError("request body is too large")
         return json.loads(self.rfile.read(n) or b"{}")
 
     def _auth(self):
@@ -190,9 +464,24 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(200, {"ok": True})
         if self.path.startswith("/data/"):
             name = os.path.basename(self.path)
+            if name == "audit.jsonl":
+                try:
+                    STORE.require_owner(self._auth())
+                except PermissionError as e:
+                    return self._json(403, {"error": str(e)})
+                try:
+                    data = STORE.read_audit()
+                except Exception:
+                    return self._json(502, {"error": "audit log is temporarily unavailable"})
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
             for folder in ("", "signatures"):
                 p = os.path.join(DATA_DIR, folder, name)
-                if os.path.isfile(p) and name.endswith((".json", ".sig")):
+                if os.path.isfile(p) and name.endswith((".json", ".sig", ".jsonl")):
                     with open(p, "rb") as f:
                         data = f.read()
                     self.send_response(200)
@@ -207,8 +496,15 @@ class Handler(BaseHTTPRequestHandler):
         try:
             body = self._body()
             if self.path == "/challenge":
-                return self._json(200, {"code": STORE.new_challenge(),
+                code, poll_token = STORE.new_challenge_pair()
+                return self._json(200, {"code": code, "poll_token": poll_token,
                                         "expires_in": CHALLENGE_TTL})
+            if self.path == "/challenge/status":
+                token = STORE.poll_challenge(str(body.get("code", "")),
+                                             str(body.get("poll_token", "")))
+                if token is None:
+                    return self._json(200, {"status": "pending"})
+                return self._json(200, {"status": "bound", "session": token})
             if self.path == "/telegram/webhook":
                 secret = os.environ.get("GRP_BOT_SECRET", "")
                 if not secret or self.headers.get(
@@ -218,26 +514,32 @@ class Handler(BaseHTTPRequestHandler):
                 text = (msg.get("text") or "").strip()
                 if not text.startswith("/bind "):
                     return self._json(200, {"ok": True})
-                token = STORE.bind(text.split(None, 1)[1].upper(),
-                                   msg.get("from", {}).get("id"))
-                return self._json(200, {"ok": True, "session": token})
+                STORE.bind(text.split(None, 1)[1].upper(),
+                            msg.get("from", {}).get("id"))
+                # The app obtains the session through its private poll token;
+                # never return it in Telegram's webhook response.
+                return self._json(200, {"ok": True})
             if self.path in ("/admin/grant", "/admin/revoke"):
                 doc = STORE.mutate(self._auth(), str(body.get("user_id")),
                                    body.get("badge", "grapegram"),
                                    self.path.endswith("grant"),
-                                   body.get("reason", ""))
-                return self._json(200, {"ok": True, "version": doc["version"]})
+                                   body.get("reason", ""), body.get("style"))
+                return self._json(200, {"ok": True, "version": doc["version"],
+                                        "published": bool(doc.pop("_published", False))})
             return self._json(404, {"error": "not found"})
         except PermissionError as e:
             return self._json(403, {"error": str(e)})
         except (ValueError, KeyError) as e:
             return self._json(400, {"error": str(e)})
+        except Exception as e:
+            print("badge service request failed:", repr(e), flush=True)
+            return self._json(502, {"error": "badge service operation failed; inspect service logs"})
 
     def log_message(self, fmt, *args):
         pass
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("GRP_PORT", "8080"))
+    port = int(os.environ.get("PORT", os.environ.get("GRP_PORT", "8080")))
     print(f"grapeGram badge service on :{port}")
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()

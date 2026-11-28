@@ -149,9 +149,15 @@ impl Server {
             let name = raw_name.rsplit('/').next().unwrap_or("");
             if name.is_empty()
                 || name.contains("..")
-                || !(name.ends_with(".json") || name.ends_with(".sig"))
+                || !(name.ends_with(".json") || name.ends_with(".sig") || name.ends_with(".jsonl"))
             {
                 return Err(ApiError::NotFound);
+            }
+            if name == "audit.jsonl" {
+                let token = request.header("authorization")
+                    .strip_prefix("Bearer ")
+                    .unwrap_or("");
+                self.store.require_owner(token)?;
             }
             for folder in ["", "signatures"] {
                 let path = if folder.is_empty() {
@@ -171,11 +177,20 @@ impl Server {
     fn post(&self, request: &Request) -> Result<Response, ApiError> {
         match request.path.as_str() {
             "/challenge" => {
-                let code = self.store.new_challenge()?;
+                let (code, poll_token) = self.store.new_challenge_pair()?;
                 Ok(Response::json(
                     200,
-                    &json!({"code": code, "expires_in": 300}),
+                    &json!({"code": code, "poll_token": poll_token, "expires_in": 300}),
                 ))
+            }
+            "/challenge/status" => {
+                let body = request.body_json()?;
+                let code = body.get("code").and_then(Value::as_str).unwrap_or("");
+                let poll_token = body.get("poll_token").and_then(Value::as_str).unwrap_or("");
+                match self.store.poll_challenge(code, poll_token)? {
+                    Some(session) => Ok(Response::json(200, &json!({"status": "bound", "session": session}))),
+                    None => Ok(Response::json(200, &json!({"status": "pending"}))),
+                }
             }
             "/telegram/webhook" => self.webhook(request),
             "/admin/grant" | "/admin/revoke" => self.admin(request),
@@ -207,11 +222,10 @@ impl Server {
             _ => None,
         }
         .ok_or_else(|| forbidden("not an owner"))?;
-        let session = self.store.bind(&code, &telegram_id)?;
-        Ok(Response::json(
-            200,
-            &json!({"ok": true, "session": session}),
-        ))
+        self.store.bind(&code, &telegram_id)?;
+        // The app obtains the session through its private poll token.
+        // Never return it in Telegram's webhook response.
+        Ok(Response::json(200, &json!({"ok": true})))
     }
 
     fn admin(&self, request: &Request) -> Result<Response, ApiError> {
@@ -230,10 +244,11 @@ impl Server {
             .and_then(Value::as_str)
             .unwrap_or("grapegram");
         let reason = body.get("reason").and_then(Value::as_str).unwrap_or("");
+        let style = body.get("style");
         let enabled = request.path.ends_with("grant");
         let version = self
             .store
-            .mutate(token, &user_id, badge, enabled, reason)?;
+            .mutate(token, &user_id, badge, enabled, reason, style)?;
         Ok(Response::json(
             200,
             &json!({"ok": true, "version": version}),

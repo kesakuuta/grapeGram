@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/OWNER/grapeGram/main/data/schemas/badge_users.schema.json",
+  "$id": "https://raw.githubusercontent.com/kesakuuta/grapeGram/main/data/schemas/badge_users.schema.json",
   "title": "grapeGram badge assignments",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "updated_at", "badges"],
   "properties": {
-    "version": { "type": "integer", "const": 1 },
+    "version": { "type": "integer", "minimum": 1 },
     "updated_at": { "type": "string", "format": "date-time" },
     "badges": {
       "type": "object",
@@ -21,6 +21,17 @@
           "granted_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" },
           "signature": { "type": "string", "maxLength": 512 },
+          "style": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "color_light": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$" },
+              "color_dark": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$" },
+              "alpha": { "type": "number", "minimum": 0, "maximum": 1 },
+              "particles": { "type": "boolean" },
+              "animation": { "type": "string", "enum": ["none", "pulse", "sparkle", "glow"] }
+            }
+          },
           "record_version": { "type": "integer", "minimum": 1 }
         }
       }

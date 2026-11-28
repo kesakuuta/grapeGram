@@ -38,6 +38,9 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
     private int designRow;
     private int studioRow;
     private int designShadowRow;
+    private int aboutHeaderRow;
+    private int aboutRow;
+    private int aboutShadowRow;
     private int licenseHeaderRow;
     private int licenseRow;
     private int licenseShadowRow;
@@ -61,6 +64,9 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
         designRow = addRow();
         studioRow = addRow();
         designShadowRow = addRow();
+        aboutHeaderRow = addRow();
+        aboutRow = addRow();
+        aboutShadowRow = addRow();
         licenseHeaderRow = addRow();
         licenseRow = addRow();
         licenseShadowRow = addRow();
@@ -126,6 +132,8 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
                         headerCell.setText("Сообщества");
                     } else if (position == designHeaderRow) {
                         headerCell.setText("Дизайн");
+                    } else if (position == aboutHeaderRow) {
+                        headerCell.setText("О grapeGram");
                     } else if (position == licenseHeaderRow) {
                         headerCell.setText("Лицензия");
                     }
@@ -135,8 +143,15 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
                     TextInfoPrivacyCell cell = (TextInfoPrivacyCell) holder.itemView;
                     cell.setBackground(Theme.getThemedDrawable(mContext,
                             R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
-                    if (position == licenseRow) {
-                        cell.setText("grapeGram распространяется под GPL-3.0. "
+                    if (position == aboutRow) {
+                        cell.setText("grapeGram — независимый Android-клиент на основе закреплённой версии exteraless. "
+                                + "Проект объединяет расширенные настройки, плагины, AyuMoments, AI и систему "
+                                + "подписанных пользовательских бейджей. Это неофициальный проект, не связанный "
+                                + "с Telegram и авторами перечисленных upstream-клиентов.");
+                    } else if (position == licenseRow) {
+                        cell.setText("Лицензии проектов: grapeGram, exteraGram и exteraless — GNU GPL-3.0; "
+                                + "Cherrygram — GNU GPL-2.0. "
+                                + "Иконки и компоненты сохраняют условия и авторские сведения исходных проектов. "
                                 + "Upstream-проекты не поддерживают grapeGram и не связаны с ним.");
                     }
                     break;
@@ -144,11 +159,11 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
                 case TYPE_SETTINGS: {
                     TextSettingsCell cell = (TextSettingsCell) holder.itemView;
                     if (position == cherrygramRow) {
-                        cell.setTextAndValue("Cherrygram", "основа клиента · GitHub", true);
+                        cell.setTextAndValue("Cherrygram", "бейджи и часть иконок · GitHub", true);
                     } else if (position == exteraGramRow) {
                         cell.setTextAndValue("exteraGram", "плагины и настройки · GitHub", true);
                     } else if (position == exteralessRow) {
-                        cell.setTextAndValue("exteraless", "базовая сборка · GitHub", true);
+                        cell.setTextAndValue("exteraless", "закреплённая база клиента · GitHub", true);
                     } else if (position == cherrygramChannelRow) {
                         cell.setTextAndValue("Канал Cherrygram", "@cherrygram", true);
                     } else if (position == cherrygramSupportRow) {
@@ -174,14 +189,14 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
         @Override
         public int getItemViewType(int position) {
             if (position == projectsHeaderRow || position == communitiesHeaderRow
-                    || position == designHeaderRow || position == licenseHeaderRow) {
+                    || position == designHeaderRow || position == aboutHeaderRow || position == licenseHeaderRow) {
                 return TYPE_HEADER;
             }
             if (position == projectsShadowRow || position == communitiesShadowRow
-                    || position == designShadowRow || position == licenseShadowRow) {
+                    || position == designShadowRow || position == aboutShadowRow || position == licenseShadowRow) {
                 return TYPE_SHADOW;
             }
-            if (position == licenseRow) {
+            if (position == aboutRow || position == licenseRow) {
                 return TYPE_INFO_PRIVACY;
             }
             return TYPE_SETTINGS;
