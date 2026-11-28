@@ -1176,6 +1176,32 @@ fn run() -> Result<(), String> {
     )?;
     write_file(&user_cell_path, &user_cell)?;
 
+
+    // Encrypt AI provider keys at rest in Android Keystore. The overlay helper
+    // is copied above, while this patch changes the real upstream AiConfig source
+    // after materialization so the protection survives every clean build.
+    let ai_config_path = proj.join("src/main/java/app/exteraless/ai/AiConfig.java");
+    let mut ai_config = read_file(&ai_config_path)?;
+    ai_config = patch_once(
+        &ai_config,
+        "import app.exteraless.ai.data.Suggestions;",
+        "import app.exteraless.ai.data.Suggestions;\\nimport app.grapegram.GrapeSecretStore;",
+        "AI key encryption import",
+    )?;
+    ai_config = patch_once(
+        &ai_config,
+        "    public static ArrayList<Service> getServices() {\\n        ArrayList<Service> services = read(KEY_SERVICES,\\n                new TypeToken<ArrayList<Service>>() {}.getType());\\n        boolean changed = false;\\n        for (Service service : services) {\\n            if (service.ensureId()) {\\n                changed = true;\\n            }\\n        }\\n        if (changed) {\\n            saveServices(services);\\n        }\\n        return services;\\n    }",
+        "    public static ArrayList<Service> getServices() {\\n        String stored = getPreferences().getString(KEY_SERVICES, null);\\n        if (TextUtils.isEmpty(stored)) {\\n            return new ArrayList<>();\\n        }\\n        try {\\n            String protectedJson = GrapeSecretStore.encryptJsonKeys(stored);\\n            String readableJson = GrapeSecretStore.decryptJsonKeys(protectedJson);\\n            if (!protectedJson.equals(stored)) {\\n                getEditor().putString(KEY_SERVICES, protectedJson).apply();\\n            }\\n            ArrayList<Service> services = GSON.fromJson(readableJson,\\n                    new TypeToken<ArrayList<Service>>() {}.getType());\\n            if (services == null) {\\n                services = new ArrayList<>();\\n            }\\n            boolean changed = false;\\n            for (Service service : services) {\\n                if (service.ensureId()) {\\n                    changed = true;\\n                }\\n            }\\n            if (changed) {\\n                saveServices(services);\\n            }\\n            return services;\\n        } catch (Exception e) {\\n            FileLog.e(\\\"AiConfig: cannot decrypt provider keys\\\", e);\\n            return new ArrayList<>();\\n        }\\n    }",
+        "encrypt AI service keys and migrate legacy plaintext",
+    )?;
+    ai_config = patch_once(
+        &ai_config,
+        "    public static void saveServices(ArrayList<Service> services) {\\n        getEditor().putString(KEY_SERVICES, GSON.toJson(services)).apply();\\n    }",
+        "    public static void saveServices(ArrayList<Service> services) {\\n        String serialized = GSON.toJson(services);\\n        String protectedJson = GrapeSecretStore.encryptJsonKeys(serialized);\\n        getEditor().putString(KEY_SERVICES, protectedJson).apply();\\n    }",
+        "persist encrypted AI service keys",
+    )?;
+    write_file(&ai_config_path, &ai_config)?;
+
     let plugins_path = proj.join("src/main/java/app/exteraless/plugins/ui/PluginsActivity.java");
     let mut plugins = read_file(&plugins_path)?;
     plugins = patch_once(&plugins,
