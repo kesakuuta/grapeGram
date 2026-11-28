@@ -73,8 +73,9 @@ def check_resources(root: Path) -> list[str]:
                 continue
             value = (element.text or "").strip()
             if "exteraless" in value.lower():
+                resource_name = element.attrib.get("name", element.tag)
                 errors.append(
-                    f"{path.relative_to(root)}: resource text still contains legacy branding: {value!r}"
+                    f"{path.relative_to(root)}:{resource_name}: resource text still contains legacy branding: {value!r}"
                 )
     return errors
 
