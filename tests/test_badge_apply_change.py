@@ -49,7 +49,7 @@ class ApplyChangeSecurityTests(unittest.TestCase):
                 payload = f.read()
             signature = sign(self.private_key, payload)
             with open(os.path.join(self.data, "signatures", name + ".sig"), "wb") as f:
-                f.write(base64.b64encode(signature) + b"\\n")
+                f.write(base64.b64encode(signature) + b"\n")
 
         with open(self.private_key, "r", encoding="ascii") as f:
             self.private_pem = f.read()
