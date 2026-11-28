@@ -193,6 +193,8 @@ jobs:
         run: |
           rust/materializer/target/release/grape-materializer \
             --root "$RUNNER_TEMP/base"
+      - name: Check grapeGram branding and storage paths
+        run: python3 "$GITHUB_WORKSPACE/client/check_branding.py" "$RUNNER_TEMP/base/TMessagesProj"
       - name: Verify identity patches
         run: |
           grep -q '^APP_PACKAGE=app.grapegram$' "$RUNNER_TEMP/base/gradle.properties"
