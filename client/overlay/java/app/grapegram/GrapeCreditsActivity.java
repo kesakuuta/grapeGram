@@ -189,11 +189,11 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
         @Override
         public int getItemViewType(int position) {
             if (position == projectsHeaderRow || position == communitiesHeaderRow
-                    || position == designHeaderRow || position == licenseHeaderRow) {
+                    || position == designHeaderRow || position == aboutHeaderRow || position == licenseHeaderRow) {
                 return TYPE_HEADER;
             }
             if (position == projectsShadowRow || position == communitiesShadowRow
-                    || position == designShadowRow || position == licenseShadowRow) {
+                    || position == designShadowRow || position == aboutShadowRow || position == licenseShadowRow) {
                 return TYPE_SHADOW;
             }
             if (position == aboutRow || position == licenseRow) {
