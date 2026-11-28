@@ -69,7 +69,7 @@ public final class GrapeBadges {
         }
     }
 
-    private static final String CACHE = "badge_cache.json";
+    private static final String CACHE = "badge_cache.bundle";
     private static final String CACHE_VER = "badge_cache_version";
     private static volatile Result memoryCache;
 
@@ -149,7 +149,7 @@ public final class GrapeBadges {
             }
         }
         Result r = new Result(true, null, list, version);
-        writeCache(context, data, version);
+        writeCache(context, data, sig, version);
         return r;
     }
 
@@ -216,18 +216,49 @@ public final class GrapeBadges {
         return new File(c.getFilesDir(), CACHE);
     }
 
-    private static void writeCache(Context c, byte[] data, int version) {
-        try (FileOutputStream out = new FileOutputStream(cacheFile(c))) {
-            out.write(data);
+    /*
+     * Keep the payload and its Ed25519 signature in one atomic cache envelope.
+     * A previously cached JSON document is never trusted merely because it was
+     * written by an earlier app process: every cache read verifies the signature.
+     */
+    private static void writeCache(Context c, byte[] data, byte[] signature, int version) {
+        File destination = cacheFile(c);
+        File temporary = new File(c.getFilesDir(), CACHE + ".tmp");
+        try {
+            JSONObject envelope = new JSONObject();
+            envelope.put("payload", Base64.encodeToString(data, Base64.NO_WRAP));
+            envelope.put("signature", Base64.encodeToString(signature, Base64.NO_WRAP));
+            envelope.put("version", version);
+            byte[] encoded = envelope.toString().getBytes(StandardCharsets.UTF_8);
+            try (FileOutputStream out = new FileOutputStream(temporary)) {
+                out.write(encoded);
+                out.flush();
+                out.getFD().sync();
+            }
+            if (!temporary.renameTo(destination)) {
+                try (FileOutputStream out = new FileOutputStream(destination)) {
+                    out.write(encoded);
+                    out.flush();
+                    out.getFD().sync();
+                }
+                // The fallback write is complete before the temporary file is removed.
+                // A failed/partial envelope is rejected by readCache().
+                //noinspection ResultOfMethodCallIgnored
+                temporary.delete();
+            }
             GrapeConfig.setInt(c, CACHE_VER, version);
         } catch (Throwable ignored) {
+            // Network data remains usable in memory for this process.
+        } finally {
+            //noinspection ResultOfMethodCallIgnored
+            temporary.delete();
         }
     }
 
     private static Result readCache(Context c) {
         File f = cacheFile(c);
         if (!f.isFile()) {
-            return Result.fail("нет данных");
+            return Result.fail("нет проверенного кэша");
         }
         try (FileInputStream in = new FileInputStream(f)) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -236,7 +267,17 @@ public final class GrapeBadges {
             while ((n = in.read(buf)) > 0) {
                 out.write(buf, 0, n);
             }
-            JSONObject doc = new JSONObject(new String(out.toByteArray(), StandardCharsets.UTF_8));
+            JSONObject envelope = new JSONObject(new String(out.toByteArray(), StandardCharsets.UTF_8));
+            byte[] payload = Base64.decode(envelope.getString("payload"), Base64.DEFAULT);
+            byte[] signature = Base64.decode(envelope.getString("signature"), Base64.DEFAULT);
+            if (!verify(GrapeConfig.PUBLIC_KEY_PEM, payload, signature)) {
+                return Result.fail("подпись кэша недействительна");
+            }
+            JSONObject doc = new JSONObject(new String(payload, StandardCharsets.UTF_8));
+            int version = doc.optInt("version", 0);
+            if (version < GrapeConfig.getInt(c, CACHE_VER, 0)) {
+                return Result.fail("версия кэша устарела");
+            }
             List<Entry> list = new ArrayList<>();
             JSONObject badges = doc.optJSONObject("badges");
             if (badges != null) {
@@ -250,9 +291,9 @@ public final class GrapeBadges {
                     }
                 }
             }
-            return new Result(true, null, list, doc.optInt("version", 0));
+            return new Result(true, null, list, version);
         } catch (Throwable t) {
-            return Result.fail("кэш повреждён");
+            return Result.fail("кэш повреждён или не подписан");
         }
     }
 }
