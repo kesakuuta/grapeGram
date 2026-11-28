@@ -15,7 +15,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
+from canonical import canonical_bytes, load
 
 
 def verify(pub: str, payload: bytes, sig: bytes) -> bool:
@@ -49,7 +49,16 @@ def main() -> int:
         sig = base64.b64decode(f.read().strip())
     with open(a.json, "rb") as f:
         payload = f.read()
-    ok = verify(a.pub, payload, sig)
+    # New signatures use canonical JSON. Accept exact raw bytes as a
+    # compatibility path for files signed by the initial prototype.
+    try:
+        canonical = canonical_bytes(load(a.json))
+    except (ValueError, TypeError):
+        print("INVALID")
+        return 1
+    ok = verify(a.pub, canonical, sig)
+    if not ok:
+        ok = verify(a.pub, payload, sig)
     print("VALID" if ok else "INVALID")
     return 0 if ok else 1
 

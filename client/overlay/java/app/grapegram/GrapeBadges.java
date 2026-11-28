@@ -22,8 +22,8 @@ import java.util.List;
 
 /**
  * Fetches, verifies and caches the signed badge list.
- * Signature covers the exact bytes of badge_users.json (Ed25519, Android 13+).
- * Nothing is applied unless the signature is valid.
+ * Accepts canonical JSON signatures and the original exact-byte signatures.
+ * Nothing is cached or applied unless the Ed25519 signature and document validate.
  */
 public final class GrapeBadges {
 
@@ -95,38 +95,85 @@ public final class GrapeBadges {
     }
 
     private static Result fetch(Context context) throws Exception {
-        byte[] data = get(GrapeConfig.DATA_BASE + "badge_users.json");
-        byte[] sig = Base64.decode(
-                new String(get(GrapeConfig.DATA_BASE + "signatures/badge_users.json.sig"),
-                        StandardCharsets.US_ASCII).trim(), Base64.DEFAULT);
-        // badge-tools signs canonical JSON (sorted keys, compact separators), not
-        // the pretty-printed bytes stored in Git. verify() accepts legacy raw
-        // signatures too, preserving compatibility with the early prototype.
-        if (!verify(GrapeConfig.PUBLIC_KEY_PEM, data, sig)) {
-            return Result.fail("подпись недействительна");
-        }
-        JSONObject doc = new JSONObject(new String(data, StandardCharsets.UTF_8));
-        int version = doc.optInt("version", 0);
-        int cachedVersion = GrapeConfig.getInt(context, CACHE_VER, 0);
-        if (version < cachedVersion) {
-            return Result.fail("устаревшая версия данных");
-        }
-        List<Entry> list = new ArrayList<>();
-        JSONObject badges = doc.optJSONObject("badges");
-        if (badges != null) {
-            Iterator<String> it = badges.keys();
-            while (it.hasNext()) {
-                String uid = it.next();
-                JSONObject rec = badges.optJSONObject(uid);
-                if (rec != null) {
-                    list.add(new Entry(uid, rec.optString("badge", "grapegram"),
-                            rec.optBoolean("enabled", false)));
+        for (int attempt = 0; attempt < 3; attempt++) {
+            // Fetch the pair again if GitHub's raw CDN briefly serves files from
+            // different commits during publication.
+            long cacheBust = System.currentTimeMillis() + attempt;
+            byte[] data = get(withCacheBust(GrapeConfig.DATA_BASE + "badge_users.json", cacheBust));
+            byte[] sig = Base64.decode(
+                    new String(get(withCacheBust(
+                            GrapeConfig.DATA_BASE + "signatures/badge_users.json.sig", cacheBust)),
+                            StandardCharsets.US_ASCII).trim(), Base64.DEFAULT);
+            if (!verify(GrapeConfig.PUBLIC_KEY_PEM, data, sig)) {
+                if (attempt < 2) {
+                    Thread.sleep(250L * (attempt + 1));
+                    continue;
                 }
+                return Result.fail("подпись недействительна");
             }
+            Result parsed = parseDocument(data);
+            if (!parsed.ok) {
+                return parsed;
+            }
+            int cachedVersion = GrapeConfig.getInt(context, CACHE_VER, 0);
+            if (parsed.version < cachedVersion) {
+                return Result.fail("устаревшая версия данных");
+            }
+            writeCache(context, data, sig, parsed.version);
+            return parsed;
         }
-        Result r = new Result(true, null, list, version);
-        writeCache(context, data, sig, version);
-        return r;
+        return Result.fail("подпись недействительна");
+    }
+
+    private static Result parseDocument(byte[] data) throws Exception {
+        JSONObject doc = new JSONObject(new String(data, StandardCharsets.UTF_8));
+        Object versionValue = doc.opt("version");
+        if (!(versionValue instanceof Number)
+                || !versionValue.toString().matches("[0-9]+")) {
+            return Result.fail("неверная версия данных");
+        }
+        int version = doc.optInt("version", 0);
+        if (version < 1 || doc.optString("updated_at", "").trim().isEmpty()) {
+            return Result.fail("неверная версия или дата данных");
+        }
+        JSONObject badges = doc.optJSONObject("badges");
+        if (badges == null) {
+            return Result.fail("отсутствует список бейджей");
+        }
+        List<Entry> entries = new ArrayList<>();
+        Iterator<String> it = badges.keys();
+        while (it.hasNext()) {
+            String uid = it.next();
+            if (uid == null || !uid.matches("[0-9]{5,20}")) {
+                return Result.fail("неверный Telegram ID в списке бейджей");
+            }
+            JSONObject rec = badges.optJSONObject(uid);
+            if (rec == null) {
+                return Result.fail("неверная запись бейджа");
+            }
+            Object badgeValue = rec.opt("badge");
+            Object enabledValue = rec.opt("enabled");
+            Object recordVersionValue = rec.opt("record_version");
+            if (!(badgeValue instanceof String) || !isKnownBadge((String) badgeValue)
+                    || !(enabledValue instanceof Boolean)
+                    || !(recordVersionValue instanceof Number)
+                    || !recordVersionValue.toString().matches("[0-9]+")
+                    || Long.parseLong(recordVersionValue.toString()) < 1) {
+                return Result.fail("неверные поля записи бейджа");
+            }
+            if (rec.has("granted_at") && !(rec.opt("granted_at") instanceof String)
+                    || rec.has("updated_at") && !(rec.opt("updated_at") instanceof String)
+                    || rec.has("signature") && !(rec.opt("signature") instanceof String)) {
+                return Result.fail("неверные дополнительные поля бейджа");
+            }
+            entries.add(new Entry(uid, (String) badgeValue, (Boolean) enabledValue));
+        }
+        return new Result(true, null, entries, version);
+    }
+
+    private static boolean isKnownBadge(String badge) {
+        return "grapegram".equals(badge) || "founder".equals(badge)
+                || "developer".equals(badge) || "contributor".equals(badge);
     }
 
     private static boolean verify(String pem, byte[] data, byte[] sig) {
@@ -152,8 +199,10 @@ public final class GrapeBadges {
             System.arraycopy(der, 12, rawKey, 0, rawKey.length);
             Ed25519PublicKeyParameters publicKey =
                     new Ed25519PublicKeyParameters(rawKey, 0);
-            return verifyBytes(publicKey, canonicalJson(data), sig)
-                    || verifyBytes(publicKey, data, sig);
+            // Current published files are signed over their exact stored bytes.
+            // Try that first; compact canonical signatures remain supported.
+            return verifyBytes(publicKey, data, sig)
+                    || verifyBytes(publicKey, canonicalJson(data), sig);
         } catch (Throwable ignored) {
             return false;
         }
@@ -246,6 +295,9 @@ public final class GrapeBadges {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(10000);
         c.setReadTimeout(15000);
+        c.setUseCaches(false);
+        c.setRequestProperty("Cache-Control", "no-cache");
+        c.setRequestProperty("Pragma", "no-cache");
         c.setRequestProperty("User-Agent", "grapeGram/" + GrapeConfig.VERSION);
         try {
             if (c.getResponseCode() != 200) {
@@ -313,26 +365,14 @@ public final class GrapeBadges {
             if (!verify(GrapeConfig.PUBLIC_KEY_PEM, data, signature)) {
                 return Result.fail("подпись кэша недействительна");
             }
-            JSONObject doc = new JSONObject(new String(data, StandardCharsets.UTF_8));
-            int version = doc.optInt("version", 0);
-            if (version <= 0 || version < GrapeConfig.getInt(c, CACHE_VER, 0)) {
+            Result parsed = parseDocument(data);
+            if (!parsed.ok) {
+                return Result.fail("кэш повреждён: " + parsed.error);
+            }
+            if (parsed.version < GrapeConfig.getInt(c, CACHE_VER, 0)) {
                 return Result.fail("устаревший кэш");
             }
-            List<Entry> list = new ArrayList<>();
-            JSONObject badges = doc.optJSONObject("badges");
-            if (badges == null) {
-                return Result.fail("неверный формат кэша");
-            }
-            Iterator<String> it = badges.keys();
-            while (it.hasNext()) {
-                String uid = it.next();
-                JSONObject rec = badges.optJSONObject(uid);
-                if (rec != null) {
-                    list.add(new Entry(uid, rec.optString("badge", "grapegram"),
-                            rec.optBoolean("enabled", false)));
-                }
-            }
-            return new Result(true, null, list, version);
+            return parsed;
         } catch (Throwable t) {
             return Result.fail("кэш повреждён");
         }

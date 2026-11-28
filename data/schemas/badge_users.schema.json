@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["version", "updated_at", "badges"],
   "properties": {
-    "version": { "type": "integer", "const": 1 },
+    "version": { "type": "integer", "minimum": 1 },
     "updated_at": { "type": "string", "format": "date-time" },
     "badges": {
       "type": "object",

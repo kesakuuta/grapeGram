@@ -184,8 +184,11 @@ class Store:
 
     def owners(self):
         owners = _load(os.path.join(self.data_dir, "owner_users.json"))["owners"]
-        if len(owners) != 2 or len(set(owners)) != 2:
-            raise RuntimeError("owner list must contain exactly two unique IDs")
+        if (not isinstance(owners, list) or len(owners) != 2
+                or any(not isinstance(owner, str) or not ID_RE.fullmatch(owner)
+                       for owner in owners)
+                or len(set(owners)) != 2):
+            raise RuntimeError("owner list must contain exactly two unique numeric IDs")
         return owners
 
     def new_challenge(self):
@@ -321,11 +324,13 @@ class Handler(BaseHTTPRequestHandler):
         return header[7:] if header.startswith("Bearer ") else ""
 
     def do_GET(self):
-        if self.path == "/healthz":
+        # Ignore cache-busting query parameters added by Android clients.
+        request_path = urllib.parse.urlsplit(self.path).path
+        if request_path == "/healthz":
             return self._json(200, {"ok": True, "service": "grapeGram-badges"})
-        if self.path == "/data/badge_users.json":
+        if request_path == "/data/badge_users.json":
             return self._file(os.path.join(DATA_DIR, "badge_users.json"))
-        if self.path == "/data/signatures/badge_users.json.sig":
+        if request_path == "/data/signatures/badge_users.json.sig":
             return self._file(os.path.join(DATA_DIR, "signatures",
                                            "badge_users.json.sig"))
         return self._json(404, {"error": "not found"})

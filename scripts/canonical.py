@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Canonical JSON encoding shared by signer, verifier and the Android client.
+"""Canonical JSON encoding shared by signer, verifier, backend and the Android Java client.
 
-Rules (must match the Kotlin implementation in the app):
+Rules (must match rust/badge-tools/src/canonical.rs and the Android Java implementation):
   * UTF-8, no BOM
   * object keys sorted by Unicode code point
   * no insignificant whitespace (',' and ':' separators)
@@ -11,7 +11,32 @@ Rules (must match the Kotlin implementation in the app):
 import json
 
 
+def _validate(value, depth=0):
+    if depth > 128:
+        raise ValueError("JSON nesting is too deep")
+    if value is None or isinstance(value, (str, bool)):
+        return
+    if isinstance(value, int):
+        if value < -(1 << 63) or value > (1 << 64) - 1:
+            raise ValueError("signed JSON integers must fit i64/u64")
+        return
+    if isinstance(value, float):
+        raise ValueError("only integer numbers are allowed in signed JSON")
+    if isinstance(value, list):
+        for item in value:
+            _validate(item, depth + 1)
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise ValueError("signed JSON object keys must be strings")
+            _validate(item, depth + 1)
+        return
+    raise ValueError("unsupported value in signed JSON")
+
+
 def canonical_bytes(obj) -> bytes:
+    _validate(obj)
     return json.dumps(
         obj,
         sort_keys=True,

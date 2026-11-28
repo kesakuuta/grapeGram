@@ -37,6 +37,26 @@ const EXT_ICONS: [(&str, &str); 17] = [
     ("human", "Human"),
     ("osu", "osu!"),
 ];
+const CHERRY_ICONS: [(&str, &str, &str, &str, &str, &str); 18] = [
+    ("cherry", "Cherrygram", "R.drawable.icon_background_default", "R.drawable.icon_foreground_cherry", "@drawable/icon_background_default", "@drawable/icon_foreground_cherry"),
+    ("dark_cherry", "Тёмная вишня", "R.drawable.icon_background_dark", "R.drawable.icon_foreground_cherry", "@drawable/icon_background_dark", "@drawable/icon_foreground_cherry"),
+    ("dark_cherry_bra", "Тёмная вишня (Bra)", "R.drawable.icon_background_dark", "R.drawable.icon_foreground_cherry_bra", "@drawable/icon_background_dark", "@drawable/icon_foreground_cherry_bra"),
+    ("white_cherry", "Белая вишня", "R.drawable.icon_background_white", "R.drawable.icon_foreground_cherry_white", "@drawable/icon_background_white", "@drawable/icon_foreground_cherry_white"),
+    ("white_cherry_bra", "Белая вишня (Bra)", "R.drawable.icon_background_white", "R.drawable.icon_foreground_cherry_white_bra", "@drawable/icon_background_white", "@drawable/icon_foreground_cherry_white_bra"),
+    ("laguna_cherry", "Лагуна", "R.drawable.icon_background_laguna", "R.drawable.icon_foreground_cherry", "@drawable/icon_background_laguna", "@drawable/icon_foreground_cherry"),
+    ("aqua_cherry", "Аква", "R.drawable.icon_background_aqua", "R.drawable.icon_foreground_cherry", "@drawable/icon_background_aqua", "@drawable/icon_foreground_cherry"),
+    ("green_cherry", "Зелёная", "R.drawable.icon_background_green", "R.drawable.icon_foreground_cherry", "@drawable/icon_background_green", "@drawable/icon_foreground_cherry"),
+    ("lavanda_cherry", "Лаванда", "R.drawable.icon_background_lavanda", "R.drawable.icon_foreground_cherry", "@drawable/icon_background_lavanda", "@drawable/icon_foreground_cherry"),
+    ("violet_sunset_cherry", "Фиолетовый закат", "R.drawable.icon_background_violet_sunset", "R.drawable.icon_foreground_cherry", "@drawable/icon_background_violet_sunset", "@drawable/icon_foreground_cherry"),
+    ("violet_sunset_cherry_bra", "Фиолетовый закат (Bra)", "R.drawable.icon_background_violet_sunset", "R.drawable.icon_foreground_cherry_bra", "@drawable/icon_background_violet_sunset", "@drawable/icon_foreground_cherry_bra"),
+    ("sunset_cherry", "Закат", "R.drawable.icon_background_sunset", "R.drawable.icon_foreground_cherry", "@drawable/icon_background_sunset", "@drawable/icon_foreground_cherry"),
+    ("sunrise_cherry", "Рассвет", "R.drawable.icon_background_sunrise", "R.drawable.icon_foreground_cherry", "@drawable/icon_background_sunrise", "@drawable/icon_foreground_cherry"),
+    ("palms_cherry", "Пальмы", "R.drawable.icon_background_palms", "R.drawable.icon_foreground_cherry", "@drawable/icon_background_palms", "@drawable/icon_foreground_cherry"),
+    ("palms_cherry_bra", "Пальмы (Bra)", "R.drawable.icon_background_palms", "R.drawable.icon_foreground_cherry_bra", "@drawable/icon_background_palms", "@drawable/icon_foreground_cherry_bra"),
+    ("turbo_cherry", "Turbo Cherry", "R.drawable.icon_5_background_sa", "R.drawable.icon_foreground_cherry", "@drawable/icon_5_background_sa", "@drawable/icon_foreground_cherry"),
+    ("nox_cherry", "Nox Cherry", "R.mipmap.icon_2_background_sa", "R.drawable.icon_foreground_cherry", "@mipmap/icon_2_background_sa", "@drawable/icon_foreground_cherry"),
+    ("dark_ny", "Тёмная NY", "R.drawable.icon_background_dark_ny", "R.drawable.icon_foreground_cherry_bra", "@drawable/icon_background_dark_ny", "@drawable/icon_foreground_cherry_bra"),
+];
 
 #[derive(Deserialize)]
 struct Config {
@@ -141,6 +161,64 @@ fn patch_once(text: &str, anchor: &str, replacement: &str, what: &str) -> Result
     Ok(text.replacen(anchor, replacement, 1))
 }
 
+fn patch_exact_count(
+    text: &str,
+    anchor: &str,
+    replacement: &str,
+    expected: usize,
+    what: &str,
+) -> Result<String, String> {
+    let n = text.matches(anchor).count();
+    if n != expected {
+        return Err(format!(
+            "{}: anchor found {} times, expected {}",
+            what, n, expected
+        ));
+    }
+    Ok(text.replace(anchor, replacement))
+}
+
+fn replace_java_method(
+    text: &str,
+    signature: &str,
+    replacement: &str,
+    what: &str,
+) -> Result<String, String> {
+    let count = text.matches(signature).count();
+    if count != 1 {
+        return Err(format!(
+            "{}: method signature found {} times, expected 1",
+            what, count
+        ));
+    }
+    let start = text.find(signature).unwrap();
+    let open = text[start..]
+        .find('{')
+        .map(|offset| start + offset)
+        .ok_or_else(|| format!("{}: method body not found", what))?;
+    let mut depth = 0usize;
+    let mut end = None;
+    for (offset, ch) in text[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    end = Some(open + offset + ch.len_utf8());
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+    let end = end.ok_or_else(|| format!("{}: unterminated method body", what))?;
+    let mut out = String::with_capacity(text.len() + replacement.len());
+    out.push_str(&text[..start]);
+    out.push_str(replacement);
+    out.push_str(&text[end..]);
+    Ok(out)
+}
+
 /// Replaces the old app name inside `<string>` text nodes only, so resource names
 /// such as `exteraless_icon_tile` and `@drawable/...` references stay intact.
 fn rebrand_xml_strings(text: &str) -> String {
@@ -181,7 +259,10 @@ fn rebrand_xml_strings(text: &str) -> String {
         out.push_str(
             &content
                 .replace("exteraless", "grapeGram")
-                .replace("Exteraless", "grapeGram"),
+                .replace("Exteraless", "grapeGram")
+                .replace("ExteraLess", "grapeGram")
+                .replace("ExteraLESS", "grapeGram")
+                .replace("EXTERALESS", "grapeGram"),
         );
         out.push_str("</string>");
         rest = &tail[close + "</string>".len()..];
@@ -362,6 +443,29 @@ fn alias_template(key: &str, icon_res: &str, enabled: bool) -> String {
     )
 }
 
+fn cherry_alias_template(key: &str, icon_res: &str) -> String {
+    format!(
+        r#"        <activity-alias
+            android:enabled="false"
+            android:name="org.telegram.messenger.GrapeCherryIcon{camel}"
+            android:targetActivity="org.telegram.ui.LaunchActivity"
+            android:icon="{icon}"
+            android:roundIcon="{icon}"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.MULTIWINDOW_LAUNCHER" />
+            </intent-filter>
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+"#,
+        camel = camel(key),
+        icon = icon_res
+    )
+}
+
 fn enum_entries() -> String {
     let mut entries = Vec::new();
     for (key, _) in ICONS.iter() {
@@ -381,6 +485,16 @@ fn enum_entries() -> String {
             id,
             id,
             camel(id)
+        ));
+    }
+    for (key, _, bg, fg, _, _) in CHERRY_ICONS.iter() {
+        entries.push(format!(
+            "        CHERRY_{}(\"GrapeCherryIcon{}\", {}, {}, R.string.GrapeIcon{})",
+            key.to_uppercase(),
+            camel(key),
+            bg,
+            fg,
+            camel(key)
         ));
     }
     entries.join(",\n")
@@ -444,6 +558,17 @@ fn run() -> Result<(), String> {
     copy_dir(&client_dir.join("overlay/java"), &proj.join("src/main/java"))?;
     copy_dir(&client_dir.join("overlay/res"), &proj.join("src/main/res"))?;
 
+    // GrapeBadges uses BC's lightweight Ed25519 verifier directly. The pinned
+    // upstream base does not bundle bcprov, so materialize the dependency here.
+    let mut build_gradle = read_file(&build_path)?;
+    build_gradle = patch_once(
+        &build_gradle,
+        "dependencies {\n",
+        "dependencies {\n    implementation 'org.bouncycastle:bcprov-jdk18on:1.83'\n",
+        "Ed25519 verifier dependency",
+    )?;
+    write_file(&build_path, &build_gradle)?;
+
     let pem_path = client_dir
         .parent()
         .unwrap_or(Path::new("."))
@@ -454,12 +579,12 @@ fn run() -> Result<(), String> {
     };
     let gconf = read_file(&gconf_path)?
         .replace("@DATA_BASE@", &data_base)
-        .replace("@PUBLIC_KEY_PEM@", &pem.replace('\n', "\\n"));
+        .replace("@PUBLIC_KEY_PEM@", &pem.replace('\n', "\n"));
     write_file(&gconf_path, &gconf)?;
 
     let row_anchor = "        items.add(UItem.asCustomShadow(topView, 200 - 12));\n";
     let row = format!(
-        "{}        // grapeGram: единственный дополнительный пункт, первым в списке\n        items.add(SettingCell.Factory.of(7001, 0xFF7C4DFF, 0xFF5E35B1, R.drawable.grape_icon_original, \"Настройки grapeGram\", \"Cherrygram · exteraGram · exteraless\"));\n        items.add(UItem.asShadow(null));\n",
+        "{}        // grapeGram: единственный дополнительный пункт, первым в списке\n        items.add(SettingCell.Factory.of(7001, 0xFF7C4DFF, 0xFF5E35B1, R.drawable.grape_icon_original, \"Настройки grapeGram\", \"персонализация · функции · плагины\"));\n        items.add(UItem.asShadow(null));\n",
         row_anchor
     );
     let case_anchor = "            case -1: {\n                presentFragment(new OpenExteraSettingsActivity());\n                break;\n            }\n";
@@ -485,6 +610,12 @@ fn run() -> Result<(), String> {
         "                } else if (open_settings == 100) {\n                    fragment = new app.grapegram.GrapeSettingsActivity();\n",
         "launch settings route",
     )?;
+    launch = patch_once(
+        &launch,
+        "    protected void onResume() {\n        super.onResume();\n",
+        "    protected void onResume() {\n        super.onResume();\n        app.grapegram.GrapeBadgeBridge.refreshIfDue(this);\n",
+        "badge refresh on foreground",
+    )?;
     write_file(&launch_path, &launch)?;
 
     let menu_path = proj.join("src/main/java/app/exteraless/drawer/MainMenuHelper.java");
@@ -495,7 +626,93 @@ fn run() -> Result<(), String> {
         "                return new MenuItemInfo(R.drawable.grape_icon_original, LocaleController.getString(R.string.OpenExteraPreferences),\n                        () -> fragment.presentFragment(new app.grapegram.GrapeSettingsActivity()), null);\n",
         "drawer settings route",
     )?;
+    menu = patch_once(
+        &menu,
+        "            case EXTERALESS_SETTINGS -> new MenuItemInfo(R.drawable.exteraless_icon_tile, LocaleController.getString(R.string.OpenExteraPreferences), null, null);",
+        "            case EXTERALESS_SETTINGS -> new MenuItemInfo(R.drawable.grape_icon_original, LocaleController.getString(R.string.OpenExteraPreferences), null, null);",
+        "drawer settings icon",
+    )?;
     write_file(&menu_path, &menu)?;
+
+    let settings_helper_path = proj.join("src/main/java/tw/nekomimi/nekogram/helpers/SettingsHelper.java");
+    let mut settings_helper = read_file(&settings_helper_path)?;
+    // Both the modern "settings" route and the legacy "exteraless" route
+    // resolve to this upstream activity. GrapeSettingsActivity extends BaseFragment,
+    // not BaseNekoSettingsActivity, so do not assign it to neko_fragment.
+    settings_helper = patch_exact_count(
+        &settings_helper,
+        "fragment = neko_fragment = new OpenExteraSettingsActivity();",
+        "fragment = new app.grapegram.GrapeSettingsActivity();",
+        2,
+        "legacy settings deep links",
+    )?;
+    write_file(&settings_helper_path, &settings_helper)?;
+
+    let settings_registry_path = proj.join("src/main/java/app/exteraless/settings/utils/SettingsRegistry.java");
+    let mut settings_registry = read_file(&settings_registry_path)?;
+    settings_registry = patch_once(
+        &settings_registry,
+        "        icons.put(OpenExteraSettingsActivity.class, R.drawable.msg_settings);",
+        "        icons.put(app.grapegram.GrapeSettingsActivity.class, R.drawable.grape_icon_original);",
+        "grapeGram settings search icon",
+    )?;
+    write_file(&settings_registry_path, &settings_registry)?;
+
+    let about_header_path = proj.join("src/main/java/app/exteraless/settings/AboutHeaderCell.java");
+    let mut about_header = read_file(&about_header_path)?;
+    about_header = patch_once(
+        &about_header,
+        "public static final int LOGO_BACKGROUND = 0xFFE83030;",
+        "public static final int LOGO_BACKGROUND = 0xFF7956C8;",
+        "grapeGram settings logo color",
+    )?;
+    about_header = patch_once(
+        &about_header,
+        "logo.setImageResource(R.drawable.exteraless_icon);",
+        "logo.setImageResource(R.drawable.grape_icon_original);",
+        "grapeGram settings logo",
+    )?;
+    write_file(&about_header_path, &about_header)?;
+
+    let updater_path = proj.join("src/main/java/app/exteraless/updater/UpdaterSheet.java");
+    let mut updater = read_file(&updater_path)?;
+    updater = patch_once(
+        &updater,
+        "logo.setImageResource(R.drawable.exteraless_icon);",
+        "logo.setImageResource(R.drawable.grape_icon_original);",
+        "grapeGram updater logo",
+    )?;
+    write_file(&updater_path, &updater)?;
+
+    let qr_path = proj.join("src/main/java/org/telegram/messenger/TelegramQRCodeWriter.java");
+    let mut qr = read_file(&qr_path)?;
+    qr = patch_once(
+        &qr,
+        "getResources().getDrawable(R.drawable.exteraless_icon)",
+        "getResources().getDrawable(R.drawable.grape_icon_original)",
+        "grapeGram QR logo",
+    )?;
+    write_file(&qr_path, &qr)?;
+
+    let glyph_path = proj.join("src/main/java/app/exteraless/glyph/GlyphController.java");
+    let mut glyph = read_file(&glyph_path)?;
+    glyph = patch_once(
+        &glyph,
+        "context.getDrawable(R.drawable.exteraless_icon_monochrome)",
+        "context.getDrawable(R.drawable.grape_icon_original)",
+        "grapeGram glyph logo",
+    )?;
+    write_file(&glyph_path, &glyph)?;
+
+    let plugin_log_path = proj.join("src/main/java/app/exteraless/plugins/PluginLog.java");
+    let mut plugin_log = read_file(&plugin_log_path)?;
+    plugin_log = patch_once(
+        &plugin_log,
+        "String header = \"exteraless \" + BuildConfig.BUILD_VERSION_STRING",
+        "String header = \"grapeGram \" + BuildConfig.BUILD_VERSION_STRING",
+        "grapeGram plugin log branding",
+    )?;
+    write_file(&plugin_log_path, &plugin_log)?;
 
     let theme_path = proj.join("src/main/java/org/telegram/ui/ThemeActivity.java");
     let mut theme = read_file(&theme_path)?;
@@ -536,6 +753,60 @@ fn run() -> Result<(), String> {
         "badge particles",
     )?;
     write_file(&profile_path, &profile)?;
+
+    // The chat-list title inherits an upstream default; migrate legacy names at display time.
+    let typeface_path = proj.join("src/main/java/tw/nekomimi/nekogram/helpers/TypefaceHelper.java");
+    let mut typeface = read_file(&typeface_path)?;
+    typeface = patch_once(
+        &typeface,
+        "        String title = (String) NaConfig.INSTANCE.getCustomTitle().defaultValue;\n",
+        "        String title = (String) NaConfig.INSTANCE.getCustomTitle().defaultValue;\n        if (title != null && (title.equalsIgnoreCase(\"exteraless\") || title.equalsIgnoreCase(\"ExteraLess\") || title.equalsIgnoreCase(\"NagramX\"))) {\n            title = \"grapeGram\";\n        }\n",
+        "grapeGram default chat-list title",
+    )?;
+    typeface = patch_once(
+        &typeface,
+        "            String customTitle = NaConfig.INSTANCE.getCustomTitle().String();\n",
+        "            String customTitle = NaConfig.INSTANCE.getCustomTitle().String();\n            if (customTitle != null && (customTitle.equalsIgnoreCase(\"exteraless\") || customTitle.equalsIgnoreCase(\"ExteraLess\") || customTitle.equalsIgnoreCase(\"NagramX\"))) {\n                customTitle = \"grapeGram\";\n            }\n",
+        "grapeGram custom chat-list title",
+    )?;
+    write_file(&typeface_path, &typeface)?;
+
+    // Notification branding must not fall back to ExteraLess assets.
+    let notifications_path = proj.join("src/main/java/org/telegram/messenger/NotificationsController.java");
+    let mut notifications = read_file(&notifications_path)?;
+    notifications = replace_java_method(
+        &notifications,
+        "    private int getNotificationIconResId()",
+        "    private int getNotificationIconResId() {\n        return R.drawable.grape_icon_original;\n    }",
+        "grapeGram notification icon",
+    )?;
+    notifications = patch_once(
+        &notifications,
+        ".setSmallIcon(R.drawable.notification)",
+        ".setSmallIcon(R.drawable.grape_icon_original)",
+        "grapeGram wallet notification icon",
+    )?;
+    write_file(&notifications_path, &notifications)?;
+
+    let notification_service_path = proj.join("src/main/java/org/telegram/messenger/NotificationsService.java");
+    let mut notification_service = read_file(&notification_service_path)?;
+    notification_service = patch_once(
+        &notification_service,
+        ".setSmallIcon(R.drawable.exteraless_notification)",
+        ".setSmallIcon(R.drawable.grape_icon_original)",
+        "grapeGram foreground notification icon",
+    )?;
+    write_file(&notification_service_path, &notification_service)?;
+
+    let session_cell_path = proj.join("src/main/java/org/telegram/ui/Cells/SessionCell.java");
+    let mut session_cell = read_file(&session_cell_path)?;
+    session_cell = patch_once(
+        &session_cell,
+        "iconId = R.drawable.exteraless_notification;",
+        "iconId = R.drawable.grape_icon_original;",
+        "grapeGram session app icon",
+    )?;
+    write_file(&session_cell_path, &session_cell)?;
 
     // Surface verified grapeGram badges in Telegram's reusable dialog/member rows.
     let user_cell_path = proj.join("src/main/java/org/telegram/ui/Cells/UserCell.java");
@@ -671,14 +942,54 @@ fn run() -> Result<(), String> {
     )?;
     write_file(&launcher_path, &l)?;
 
+    // The launcher picker exposes only grapeGram's nine curated icons. Legacy
+    // exteraless aliases remain disabled and cannot leak into the client UI.
+    let app_icons_path = proj.join("src/main/java/app/exteraless/appicons/AppIcons.java");
+    let mut app_icons = read_file(&app_icons_path)?;
+    app_icons = patch_once(
+        &app_icons,
+        "        for (LauncherIcon icon : LauncherIcon.values()) {\n            if (!icon.premium || !blocked || LauncherIconController.isEnabled(icon)) {\n                icons.add(icon);\n            }\n        }",
+        "        for (LauncherIcon icon : LauncherIcon.values()) {\n            if ((icon.name().startsWith(\"GRAPE_\") || icon.name().startsWith(\"CHERRY_\"))\n                    && (!icon.premium || !blocked || LauncherIconController.isEnabled(icon))) {\n                icons.add(icon);\n            }\n        }",
+        "grapeGram-only launcher icons",
+    )?;
+    write_file(&app_icons_path, &app_icons)?;
+
     let mut m = disable_alias(&manifest_before, "org.telegram.messenger.ExteralessIcon")?;
+    let adaptive_dir = proj.join("src/main/res/mipmap-anydpi-v26");
+    let legacy_icon_dir = proj.join("src/main/res/mipmap-anydpi");
+    fs::create_dir_all(&adaptive_dir).map_err(|e| format!("create {}: {}", adaptive_dir.display(), e))?;
+    fs::create_dir_all(&legacy_icon_dir).map_err(|e| format!("create {}: {}", legacy_icon_dir.display(), e))?;
+    let mut cherry_aliases = String::new();
+    for (key, _, _, _, bg, fg) in CHERRY_ICONS.iter() {
+        let adaptive = format!(
+            r#"<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="{bg}" />
+    <foreground android:drawable="{fg}" />
+</adaptive-icon>
+"#,
+            bg = bg,
+            fg = fg
+        );
+        let legacy = format!(
+            r#"<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="{bg}" />
+    <item android:drawable="{fg}" />
+</layer-list>
+"#,
+            bg = bg,
+            fg = fg
+        );
+        write_file(&adaptive_dir.join(format!("grape_cherry_icon_{}.xml", key)), &adaptive)?;
+        write_file(&legacy_icon_dir.join(format!("grape_cherry_icon_{}.xml", key)), &legacy)?;
+        cherry_aliases.push_str(&cherry_alias_template(key, &format!("@mipmap/grape_cherry_icon_{}", key)));
+    }
     let aliases = ICONS
         .iter()
         .map(|(key, _)| alias_template(key, &format!("@drawable/grape_icon_{}", key), *key == "original"))
         .chain(EXT_ICONS.iter().map(|(id, _)| {
             alias_template(id, &format!("@mipmap/ext_icon_{}", id), false)
         }))
-        .collect::<String>();
+        .collect::<String>() + &cherry_aliases;
     m = patch_once(&m, "    </application>", &format!("{}    </application>", aliases), "manifest aliases")?;
     m = patch_application_tag(
         &m,
@@ -706,6 +1017,9 @@ fn run() -> Result<(), String> {
                 .iter()
                 .map(|(id, name)| format!("    <string name=\"GrapeIcon{}\">{}</string>\n", camel(id), name)),
         )
+        .chain(CHERRY_ICONS.iter().map(|(key, name, _, _, _, _)| {
+            format!("    <string name=\"GrapeIcon{}\">{}</string>\n", camel(key), name)
+        }))
         .collect::<String>();
     let (st_new, n) = set_xml_string(&st, "AppName", APP_NAME);
     if n != 1 {
@@ -949,8 +1263,8 @@ fn run() -> Result<(), String> {
     if !chats.contains("private static int appIconIcon()") {
         let end = chats.rfind('}').ok_or("chats final brace")?;
         chats.insert_str(end, r#"
-    private static int appIconIcon() {
-        return R.drawable.grape_icon_original;
+    private int appIconIcon() {
+        return app.grapegram.GrapeIconResolver.getSelectedIcon(getContext());
     }
 "#);
     }
@@ -1003,6 +1317,178 @@ fn run() -> Result<(), String> {
     }
     write_file(&plugins_path, &plugins)?;
 
+    let profile_path = proj.join("src/main/java/org/telegram/ui/ProfileActivity.java");
+    let mut profile = read_file(&profile_path)?;
+    profile = patch_once(
+        &profile,
+        "        badgeDrawable.setParticles(false, animated);",
+        "        badgeDrawable.setParticles(true, animated);",
+        "grapeGram profile badge particles",
+    )?;
+    write_file(&profile_path, &profile)?;
+
+    let chat_avatar_path = proj.join("src/main/java/org/telegram/ui/Components/ChatAvatarContainer.java");
+    let mut chat_avatar = read_file(&chat_avatar_path)?;
+    chat_avatar = patch_once(
+        &chat_avatar,
+        "import org.telegram.messenger.ChatObject;",
+        "import com.exteragram.messenger.api.dto.BadgeDTO;\nimport com.exteragram.messenger.badges.BadgesController;\nimport org.telegram.messenger.ChatObject;",
+        "grapeGram chat badge imports",
+    )?;
+    chat_avatar = patch_once(
+        &chat_avatar,
+        "    private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable botVerificationDrawable;",
+        "    private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable botVerificationDrawable;\n    private AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable grapeBadgeDrawable;",
+        "grapeGram chat badge drawable field",
+    )?;
+    chat_avatar = patch_once(
+        &chat_avatar,
+        "        checkActionBar(animated);\n    }\n\n    private Drawable emojiStatusDefaultDrawable;",
+        r#"        // grapeGram: show the remotely signed badge in the chat title.
+        // Keep Telegram's scam/verified and premium/emoji-status indicators intact.
+        BadgeDTO grapeBadge = null;
+        TLRPC.User grapeBadgeUser = parentFragment != null ? parentFragment.getCurrentUser() : null;
+        if (parentFragment != null
+                && parentFragment.getChatMode() == ChatActivity.MODE_DEFAULT
+                && !parentFragment.isTopic
+                && !scam && !fake && !verified
+                && !premium && DialogObject.getEmojiStatusDocumentId(emojiStatus) == 0) {
+            if (grapeBadgeUser != null) {
+                grapeBadge = BadgesController.INSTANCE.getBadge(grapeBadgeUser);
+            }
+        }
+        if (grapeBadge != null) {
+            if (grapeBadgeDrawable == null) {
+                grapeBadgeDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(
+                        titleTextView, dp(18), AnimatedEmojiDrawable.CACHE_TYPE_KEYBOARD);
+                if (isAttachedToWindow()) {
+                    grapeBadgeDrawable.attach();
+                }
+            }
+            grapeBadgeDrawable.set(grapeBadge.getDocumentId(), animated);
+            grapeBadgeDrawable.setParticles(true, animated);
+            titleTextView.setRightDrawable(grapeBadgeDrawable);
+            rightDrawableContentDescription = grapeBadge.getText();
+            final BadgeDTO badgeForClick = grapeBadge;
+            final TLRPC.User userForClick = grapeBadgeUser;
+            titleTextView.setRightDrawableOnClick(v -> {
+                if (userForClick != null) {
+                    BadgesController.INSTANCE.showBadgeBulletin(
+                            parentFragment, badgeForClick, userForClick, resourcesProvider, currentAccount);
+                }
+            });
+        } else if (grapeBadgeDrawable != null) {
+            grapeBadgeDrawable.set((Drawable) null, animated);
+            if (titleTextView.getRightDrawable() == grapeBadgeDrawable) {
+                titleTextView.setRightDrawable(null);
+                rightDrawableContentDescription = null;
+            }
+        }
+        if (grapeBadge == null) {
+            titleTextView.setRightDrawableOnClick(null);
+        }
+        checkActionBar(animated);
+    }
+
+    private Drawable emojiStatusDefaultDrawable;"#,
+        "grapeGram chat title badge",
+    )?;
+    chat_avatar = patch_once(
+        &chat_avatar,
+        "        if (emojiStatusDrawable != null) {\n            emojiStatusDrawable.attach();\n        }",
+        "        if (emojiStatusDrawable != null) {\n            emojiStatusDrawable.attach();\n        }\n        if (grapeBadgeDrawable != null) {\n            grapeBadgeDrawable.attach();\n        }",
+        "grapeGram chat badge attach",
+    )?;
+    chat_avatar = patch_once(
+        &chat_avatar,
+        "        if (emojiStatusDrawable != null) {\n            emojiStatusDrawable.detach();\n        }",
+        "        if (emojiStatusDrawable != null) {\n            emojiStatusDrawable.detach();\n        }\n        if (grapeBadgeDrawable != null) {\n            grapeBadgeDrawable.detach();\n        }",
+        "grapeGram chat badge detach",
+    )?;
+    write_file(&chat_avatar_path, &chat_avatar)?;
+
+    let chat_message_path = proj.join("src/main/java/org/telegram/ui/Cells/ChatMessageCell.java");
+    let mut chat_message = read_file(&chat_message_path)?;
+    chat_message = patch_once(
+        &chat_message,
+        "import org.telegram.messenger.AndroidUtilities;",
+        "import com.exteragram.messenger.api.dto.BadgeDTO;\nimport com.exteragram.messenger.badges.BadgesController;\nimport org.telegram.messenger.AndroidUtilities;",
+        "grapeGram message badge imports",
+    )?;
+    chat_message = patch_once(
+        &chat_message,
+        "    public AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable currentNameEmojiStatusDrawable;",
+        "    public AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable currentNameEmojiStatusDrawable;\n    private BadgeDTO currentNameBadge;\n    private AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable currentNameBadgeDrawable;",
+        "grapeGram message badge fields",
+    )?;
+    chat_message = patch_once(
+        &chat_message,
+        "            currentUser = null;\n            currentChat = null;",
+        "            currentUser = null;\n            currentChat = null;\n            currentNameBadge = null;\n            if (currentNameBadgeDrawable != null) {\n                currentNameBadgeDrawable.set((Drawable) null, false);\n            }",
+        "grapeGram message badge reset",
+    )?;
+    chat_message = patch_once(
+        &chat_message,
+        "            currentNameStatus = null;\n            nameStatusSlug = null;\n            currentNameBotVerificationId = 0;",
+        "            currentNameStatus = null;\n            nameStatusSlug = null;\n            currentNameBotVerificationId = 0;\n            currentNameBadge = currentUser != null && !viaBot && !viaGuestBot\n                    ? BadgesController.INSTANCE.getBadge(currentUser) : null;",
+        "grapeGram message badge lookup",
+    )?;
+    chat_message = patch_once(
+        &chat_message,
+        "            if (currentNameBotVerificationId != 0) {\n                nameWidth -= dp(4 + 12 + 4);\n            }",
+        "            if (currentNameBotVerificationId != 0) {\n                nameWidth -= dp(4 + 12 + 4);\n            }\n            if (currentNameBadge != null) {\n                nameWidth -= dp(4 + 18 + 4);\n            }",
+        "grapeGram message badge width reservation",
+    )?;
+    chat_message = patch_once(
+        &chat_message,
+        "                    nameWidth = nameLayoutWidth = (int) Math.ceil(nameLayout.getLineWidth(0));",
+        "                    nameWidth = nameLayoutWidth = (int) Math.ceil(nameLayout.getLineWidth(0));\n                    if (currentNameBadge != null) {\n                        nameWidth += dp(4 + 18 + 4);\n                    }",
+        "grapeGram message badge measured width",
+    )?;
+    chat_message = patch_once(
+        &chat_message,
+        "            if (currentNameStatusDrawable != null) {\n                if (currentNameStatus == null) {\n                    currentNameStatusDrawable.set((Drawable) null, false);\n                } else if (currentNameStatus instanceof Long) {\n                    currentNameStatusDrawable.set((long) currentNameStatus, false);\n                } else if (currentNameStatus instanceof Drawable) {\n                    currentNameStatusDrawable.set((Drawable) currentNameStatus, false);\n                }\n            }",
+        "            if (currentNameStatusDrawable != null) {\n                if (currentNameStatus == null) {\n                    currentNameStatusDrawable.set((Drawable) null, false);\n                } else if (currentNameStatus instanceof Long) {\n                    currentNameStatusDrawable.set((long) currentNameStatus, false);\n                } else if (currentNameStatus instanceof Drawable) {\n                    currentNameStatusDrawable.set((Drawable) currentNameStatus, false);\n                }\n            }\n            if (currentNameBadge != null) {\n                if (currentNameBadgeDrawable == null) {\n                    currentNameBadgeDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(this, true, dp(18));\n                    if (attachedToWindow) {\n                        currentNameBadgeDrawable.attach();\n                    }\n                }\n                currentNameBadgeDrawable.set(currentNameBadge.getDocumentId(), false);\n                currentNameBadgeDrawable.setParticles(true, false);\n            } else if (currentNameBadgeDrawable != null) {\n                currentNameBadgeDrawable.set((Drawable) null, false);\n            }",
+        "grapeGram message badge drawable",
+    )?;
+    chat_message = patch_once(
+        &chat_message,
+        "        if (currentNameStatusDrawable != null) {\n            currentNameStatusDrawable.detach();\n        }",
+        "        if (currentNameStatusDrawable != null) {\n            currentNameStatusDrawable.detach();\n        }\n        if (currentNameBadgeDrawable != null) {\n            currentNameBadgeDrawable.detach();\n        }",
+        "grapeGram message badge detach",
+    )?;
+    chat_message = patch_once(
+        &chat_message,
+        "        if (currentNameStatusDrawable != null) {\n            currentNameStatusDrawable.attach();\n        }",
+        "        if (currentNameStatusDrawable != null) {\n            currentNameStatusDrawable.attach();\n        }\n        if (currentNameBadgeDrawable != null) {\n            currentNameBadgeDrawable.attach();\n        }",
+        "grapeGram message badge attach",
+    )?;
+    chat_message = patch_once(
+        &chat_message,
+        "if (super.verifyDrawable(who) || who == selectorDrawable[0]",
+        "if (super.verifyDrawable(who) || who == currentNameBadgeDrawable || who == selectorDrawable[0]",
+        "grapeGram message badge drawable verification",
+    )?;
+    chat_message = patch_once(
+        &chat_message,
+        "if ((currentNameStatusDrawable != null || currentNameEmojiStatusDrawable != null || topicButton != null",
+        "if ((currentNameStatusDrawable != null || currentNameEmojiStatusDrawable != null || currentNameBadgeDrawable != null && currentNameBadge != null || topicButton != null",
+        "grapeGram message badge draw condition",
+    )?;
+    chat_message = patch_once(
+        &chat_message,
+        "                currentNameStatusDrawable.draw(canvas);\n            }\n",
+        "                currentNameStatusDrawable.draw(canvas);\n            }\n            if (currentNameBadgeDrawable != null && currentNameBadge != null) {\n                float badgeOffset = currentNameStatus != null ? dp(24) : dp(2);\n                float badgeX = Math.abs(nx) + (viaNameWidth > 0 ? viaNameWidth - dp(4 + 28) : nameLayoutWidth) + badgeOffset;\n                currentNameBadgeDrawable.setBounds(\n                        (int) badgeX,\n                        (int) (ny + nameLayout.getHeight() / 2 - dp(9)),\n                        (int) (badgeX + dp(18)),\n                        (int) (ny + nameLayout.getHeight() / 2 + dp(9)));\n                currentNameBadgeDrawable.setAlpha(255);\n                currentNameBadgeDrawable.draw(canvas);\n            }\n",
+        "grapeGram message badge drawing",
+    )?;
+    chat_message = patch_once(
+        &chat_message,
+        "                    if (currentNameStatus != null && viaNameWidth <= 0) {\n                        nameEnd += dp(4 + 12 + 4);\n                    }",
+        "                    if (currentNameStatus != null && viaNameWidth <= 0) {\n                        nameEnd += dp(4 + 12 + 4);\n                    }\n                    if (currentNameBadge != null) {\n                        nameEnd += dp(4 + 18 + 4);\n                    }",
+        "grapeGram message badge compact admin spacing",
+    )?;
+    write_file(&chat_message_path, &chat_message)?;
+
     let app_path = proj.join("src/main/java/org/telegram/messenger/ApplicationLoader.java");
     let mut app = read_file(&app_path)?;
     app = patch_once(&app,
@@ -1028,8 +1514,32 @@ fn run() -> Result<(), String> {
     expect_count(app_tag, "android:roundIcon=\"@drawable/grape_icon_original\"", 1, "verify roundIcon")?;
     let settings = read_file(&settings_path)?;
     expect_count(&settings, "case 7001:", 1, "verify settings case")?;
+    for (key, _, _, _, _, _) in CHERRY_ICONS.iter() {
+        expect_count(&manifest, &format!("android:name=\"org.telegram.messenger.GrapeCherryIcon{}\"", camel(key)), 1, "verify Cherrygram icon alias")?;
+    }
     let launcher = read_file(&launcher_path)?;
     expect_count(&launcher, "GRAPE_ORIGINAL", 3, "verify launcher enum")?;
+    let app_icons = read_file(&app_icons_path)?;
+    expect_count(&app_icons, "(icon.name().startsWith(\"GRAPE_\") || icon.name().startsWith(\"CHERRY_\"))", 1, "verify grapeGram and Cherrygram icon picker")?;
+    let typeface = read_file(&typeface_path)?;
+    expect_count(&typeface, "customTitle = \"grapeGram\";", 1, "verify legacy custom chat title migration")?;
+    let notifications = read_file(&notifications_path)?;
+    expect_count(&notifications, "return R.drawable.grape_icon_original;", 1, "verify notification icon uses grapeGram")?;
+    if notifications.contains("R.drawable.exteraless_notification") {
+        return Err("verify: legacy notification icon remains".to_string());
+    }
+    let notification_service = read_file(&notification_service_path)?;
+    expect_count(&notification_service, "setSmallIcon(R.drawable.grape_icon_original)", 1, "verify foreground notification icon")?;
+    let session_cell = read_file(&session_cell_path)?;
+    if session_cell.contains("R.drawable.exteraless_notification") {
+        return Err("verify: legacy session icon remains".to_string());
+    }
+    let icon_resolver_path = proj.join("src/main/java/app/grapegram/GrapeIconResolver.java");
+    let icon_resolver = read_file(&icon_resolver_path)?;
+    expect_count(&icon_resolver, "getSelectedIcon", 1, "verify dynamic grapeGram icon resolver")?;
+    expect_count(&icon_resolver, "GrapeCherryIcon", 18, "verify Cherrygram icon resolver aliases")?;
+    let build_gradle = read_file(&build_path)?;
+    expect_count(&build_gradle, "org.bouncycastle:bcprov-jdk18on:1.83", 1, "verify Ed25519 verifier dependency")?;
     let props = read_file(&props_path)?;
     if get_gradle_property(&props, "APP_PACKAGE")? != PACKAGE {
         return Err("verify: APP_PACKAGE is not app.grapegram".to_string());
@@ -1081,6 +1591,14 @@ mod tests {
     }
 
     #[test]
+    fn rebrand_xml_strings_handles_legacy_casing_without_touching_resource_names() {
+        let src = "<resources><string name=\"a\">ExteraLess</string><string name=\"b\">exteraless</string><string name=\"c\">Keep</string></resources>";
+        let out = rebrand_xml_strings(src);
+        assert!(out.contains(">grapeGram</string>"));
+        assert!(out.contains("name=\"c\">Keep</string>"));
+    }
+
+    #[test]
     fn set_xml_string_replaces_value_only() {
         let src = "<resources>\n    <string name=\"AppName\">old</string>\n    <string name=\"Other\">keep</string>\n</resources>";
         let (out, n) = set_xml_string(src, "AppName", "grapeGram");
@@ -1129,9 +1647,13 @@ mod tests {
         assert!(enums.contains("GRAPE_SILK(\"GrapeIconSilk\""));
         assert_eq!(enums.matches("GRAPE_").count(), 9);
         assert_eq!(enums.matches("EXT_").count(), 17);
+        assert_eq!(enums.lines().filter(|line| line.trim_start().starts_with("CHERRY_")).count(), 18);
         let alias = alias_template("original", "@drawable/grape_icon_original", true);
         assert!(alias.contains("android:enabled=\"true\""));
         assert!(alias.contains("org.telegram.messenger.GrapeIconOriginal"));
         assert!(alias.contains("@drawable/grape_icon_original"));
+        let cherry_alias = cherry_alias_template("dark_cherry", "@mipmap/grape_cherry_icon_dark_cherry");
+        assert!(cherry_alias.contains("GrapeCherryIconDark_cherry"));
+        assert!(cherry_alias.contains("@mipmap/grape_cherry_icon_dark_cherry"));
     }
 }

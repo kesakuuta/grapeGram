@@ -26,22 +26,55 @@ public final class GrapeBadgeBridge {
     private static final long CONTRIBUTOR = 5393391313502609448L;
     private static final String PREFS = "grape_badge_bridge";
     private static final String KEY_SYNCED_IDS = "synced_user_ids";
+    private static final String KEY_LAST_REFRESH = "last_refresh_attempt";
+    private static final long REFRESH_INTERVAL_MS = 60L * 60L * 1000L;
+    private static volatile boolean refreshInProgress;
 
     private GrapeBadgeBridge() {
     }
 
     /** Refreshes the signed list on app startup, then applies the verified cache. */
     public static void syncAsync(Context context) {
+        scheduleRefresh(context, true);
+    }
+
+    /** Refreshes after returning to foreground, at most once per hour. */
+    public static void refreshIfDue(Context context) {
+        scheduleRefresh(context, false);
+    }
+
+    private static void scheduleRefresh(Context context, boolean force) {
+        if (context == null) {
+            return;
+        }
         final Context appContext = context.getApplicationContext();
+        final SharedPreferences prefs = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        synchronized (GrapeBadgeBridge.class) {
+            long now = System.currentTimeMillis();
+            long lastAttempt = prefs.getLong(KEY_LAST_REFRESH, 0L);
+            if (refreshInProgress || (!force && now - lastAttempt < REFRESH_INTERVAL_MS)) {
+                return;
+            }
+            refreshInProgress = true;
+            prefs.edit().putLong(KEY_LAST_REFRESH, now).apply();
+        }
         Utilities.globalQueue.postRunnable(() -> {
-            GrapeBadges.load(appContext, true);
-            sync(appContext);
+            try {
+                GrapeBadges.load(appContext, true);
+                sync(appContext);
+            } finally {
+                synchronized (GrapeBadgeBridge.class) {
+                    refreshInProgress = false;
+                }
+            }
         });
     }
 
     /** Applies an already refreshed cache without making a duplicate network request. */
     public static void syncCachedAsync(Context context) {
         final Context appContext = context.getApplicationContext();
+        appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putLong(KEY_LAST_REFRESH, System.currentTimeMillis()).apply();
         Utilities.globalQueue.postRunnable(() -> sync(appContext));
     }
 

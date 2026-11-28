@@ -89,11 +89,26 @@ class DataTests(unittest.TestCase):
             self.assertIsInstance(rec["enabled"], bool)
             self.assertGreaterEqual(rec["record_version"], 1)
 
+    def test_badge_schema_allows_version_increments(self):
+        with open(os.path.join(ROOT, "data", "schemas", "badge_users.schema.json"),
+                  encoding="utf-8") as f:
+            schema = json.load(f)
+        version = schema["properties"]["version"]
+        self.assertEqual(version.get("minimum"), 1)
+        self.assertNotIn("const", version)
+
     def test_canonical_is_order_independent(self):
         a = {"b": 1, "a": {"y": 2, "x": [1, 2]}}
         b = {"a": {"x": [1, 2], "y": 2}, "b": 1}
         self.assertEqual(canonical_bytes(a), canonical_bytes(b))
         self.assertNotIn(b" ", canonical_bytes(a))
+
+    def test_canonical_rejects_non_integer_numbers(self):
+        with self.assertRaises(ValueError):
+            canonical_bytes({"amount": 1.5})
+        with self.assertRaises(ValueError):
+            canonical_bytes({"amount": 1 << 64})
+        self.assertEqual(canonical_bytes({"enabled": True}), b'{"enabled":true}')
 
 
 class CryptoTests(unittest.TestCase):
@@ -111,6 +126,25 @@ class CryptoTests(unittest.TestCase):
         sig = sign(self.priv, self.payload)
         self.assertEqual(len(sig), 64)
         self.assertTrue(verify(self.pub, self.payload, sig))
+
+    def test_signing_scripts_use_canonical_json(self):
+        document = {"z": 2, "a": {"b": True, "a": "grapeGram"}}
+        json_path = os.path.join(self.tmp, "sample.json")
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(document, f, indent=2)
+        out_dir = os.path.join(self.tmp, "signatures")
+        subprocess.run([
+            sys.executable, os.path.join(ROOT, "scripts", "sign_data.py"),
+            "--key", self.priv, "--out", out_dir, json_path
+        ], check=True, capture_output=True)
+        signature_path = os.path.join(out_dir, "sample.json.sig")
+        with open(signature_path, "rb") as f:
+            signature = base64.b64decode(f.read().strip())
+        self.assertTrue(verify(self.pub, canonical_bytes(document), signature))
+        subprocess.run([
+            sys.executable, os.path.join(ROOT, "scripts", "verify_data.py"),
+            "--pub", self.pub, json_path, signature_path
+        ], check=True, capture_output=True)
 
     def test_tampered_document_fails(self):
         sig = sign(self.priv, self.payload)
@@ -137,7 +171,8 @@ class CryptoTests(unittest.TestCase):
             with open(os.path.join(ROOT, "data", "signatures",
                                    name + ".sig"), "rb") as f:
                 sig = base64.b64decode(f.read().strip())
-            self.assertTrue(verify(pub, payload, sig), name)
+            canonical = canonical_bytes(json.loads(payload))
+            self.assertTrue(verify(pub, canonical, sig) or verify(pub, payload, sig), name)
 
     def test_no_private_key_in_repo(self):
         marker = b"BEGIN " + b"PRIVATE" + b" KEY"
@@ -171,6 +206,22 @@ class StoreTests(unittest.TestCase):
         server.publish_badge_files = self.old_publisher
         os.environ.pop("GRP_SIGNING_KEY_FILE", None)
         shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_owner_allowlist_requires_two_unique_numeric_ids(self):
+        path = os.path.join(self.data, "owner_users.json")
+        invalid_lists = [
+            ["7293365262"],
+            ["7293365262", "7293365262"],
+            ["not-an-id", "960792706"],
+            [None, "960792706"],
+        ]
+        for owners in invalid_lists:
+            with self.subTest(owners=owners):
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump({"version": 1, "owners": owners}, f)
+                with self.assertRaises(RuntimeError):
+                    self.store.owners()
+        shutil.copy(os.path.join(ROOT, "data", "owner_users.json"), path)
 
     def test_challenges_and_sessions_survive_restart(self):
         code = self.store.new_challenge()
@@ -304,6 +355,86 @@ class IconTests(unittest.TestCase):
             self.assertEqual(px[((256 * w) + 256) * 4 + 3], 255)
 
 
+class SettingsRegressionTests(unittest.TestCase):
+    def test_grapegram_hub_owns_custom_settings_and_icon_picker_is_nested(self):
+        path = os.path.join(ROOT, "client", "overlay", "java", "app",
+                            "grapegram", "GrapeSettingsActivity.java")
+        with open(path, encoding="utf-8") as source_file:
+            source = source_file.read()
+        self.assertIn('title.setText("grapeGram")', source)
+        self.assertIn('"Менеджер плагинов"', source)
+        self.assertIn('"Бейджи grapeGram"', source)
+        self.assertIn("new LiteModeSettingsActivity()", source)
+        self.assertIn("new OpenExteraGeneralActivity()", source)
+        self.assertNotIn("ID_ICONS", source)
+        self.assertNotIn("Разрешения плагинов", source)
+        self.assertNotIn("Журнал активности", source)
+
+    def test_icon_picker_is_only_in_chat_settings(self):
+        path = os.path.join(ROOT, "rust", "materializer", "src", "main.rs")
+        with open(path, encoding="utf-8") as source_file:
+            source = source_file.read()
+        self.assertIn("appIconRow = addRow();", source)
+        self.assertIn("new app.exteraless.appicons.AppIconsActivity()", source)
+        self.assertIn("position == appIconRow", source)
+        self.assertIn(r'icon.name().startsWith(\"GRAPE_\")', source)
+        self.assertIn(r'icon.name().startsWith(\"CHERRY_\")', source)
+        self.assertIn("org.bouncycastle:bcprov-jdk18on:1.83", source)
+
+    def test_settings_deep_links_route_to_grapegram_hub(self):
+        materializer_path = os.path.join(ROOT, "rust", "materializer", "src", "main.rs")
+        with open(materializer_path, encoding="utf-8") as source_file:
+            materializer = source_file.read()
+        self.assertIn("patch_exact_count(", materializer)
+        self.assertIn('"fragment = neko_fragment = new OpenExteraSettingsActivity();"', materializer)
+        self.assertIn('"fragment = new app.grapegram.GrapeSettingsActivity();"', materializer)
+        self.assertIn('"legacy settings deep links"', materializer)
+        settings_path = os.path.join(ROOT, "client", "overlay", "java", "app",
+                                     "grapegram", "GrapeSettingsActivity.java")
+        with open(settings_path, encoding="utf-8") as source_file:
+            settings = source_file.read()
+        self.assertIn("public class GrapeSettingsActivity extends BaseFragment", settings)
+
+    def test_notification_icon_patch_replaces_method_without_format_fragility(self):
+        path = os.path.join(ROOT, "rust", "materializer", "src", "main.rs")
+        with open(path, encoding="utf-8") as source_file:
+            source = source_file.read()
+        self.assertIn("fn replace_java_method(", source)
+        self.assertIn('"    private int getNotificationIconResId()"', source)
+        self.assertIn("return R.drawable.grape_icon_original;", source)
+        self.assertNotIn("let old_notification_icon = r#", source)
+
+    def test_android_signature_verifier_has_raw_and_canonical_compatibility(self):
+        path = os.path.join(ROOT, "client", "overlay", "java", "app",
+                            "grapegram", "GrapeBadges.java")
+        with open(path, encoding="utf-8") as source_file:
+            source = source_file.read()
+        self.assertIn("org.bouncycastle.crypto.signers.Ed25519Signer", source)
+        self.assertIn("verifyBytes(publicKey, canonicalJson(data), sig)", source)
+        self.assertIn("verifyBytes(publicKey, data, sig)", source)
+        self.assertIn("for (int attempt = 0; attempt < 3; attempt++)", source)
+        self.assertIn("c.setUseCaches(false)", source)
+        self.assertIn('CACHE_SIGNATURE = "badge_cache.json.sig"', source)
+
+
+class BadgeDisplayRegressionTests(unittest.TestCase):
+    def test_signed_badges_are_wired_to_chat_header_and_profile_particles(self):
+        path = os.path.join(ROOT, "rust", "materializer", "src", "main.rs")
+        with open(path, encoding="utf-8") as source_file:
+            source = source_file.read()
+        self.assertIn("ChatAvatarContainer.java", source)
+        self.assertIn("ChatMessageCell.java", source)
+        self.assertIn("BadgesController.INSTANCE.getBadge(grapeBadgeUser)", source)
+        self.assertIn("currentNameBadge = currentUser != null && !viaBot && !viaGuestBot", source)
+        self.assertIn("currentNameBadgeDrawable.draw(canvas)", source)
+        self.assertIn("currentNameBadgeDrawable.attach()", source)
+        self.assertIn("currentNameBadgeDrawable.detach()", source)
+        self.assertIn("currentNameBadgeDrawable.set((Drawable) null, false)", source)
+        self.assertNotIn("grapeBadgeChat", source)
+        self.assertIn("grapeBadgeDrawable.setParticles(true, animated)", source)
+        self.assertIn("badgeDrawable.setParticles(true, animated)", source)
+
+
 class BadgeBridgeRegressionTests(unittest.TestCase):
     def test_sync_removes_previously_synced_revoked_badges(self):
         path = os.path.join(ROOT, "client", "overlay", "java", "app",
@@ -322,6 +453,15 @@ class BadgeBridgeRegressionTests(unittest.TestCase):
         self.assertIn('if (!entry.enabled || !isKnownBadge(entry.badge))', source)
         self.assertIn('"contributor".equals(badge)', source)
 
+    def test_foreground_refresh_is_throttled(self):
+        path = os.path.join(ROOT, "client", "overlay", "java", "app",
+                            "grapegram", "GrapeBadgeBridge.java")
+        with open(path, encoding="utf-8") as source_file:
+            source = source_file.read()
+        self.assertIn("refreshIfDue(Context context)", source)
+        self.assertIn("REFRESH_INTERVAL_MS = 60L * 60L * 1000L", source)
+        self.assertIn("KEY_LAST_REFRESH", source)
+
     def test_startup_refreshes_network_but_manual_sync_reuses_cache(self):
         bridge_path = os.path.join(ROOT, "client", "overlay", "java", "app",
                                    "grapegram", "GrapeBadgeBridge.java")
@@ -334,6 +474,17 @@ class BadgeBridgeRegressionTests(unittest.TestCase):
         with open(settings_path, encoding="utf-8") as source_file:
             settings = source_file.read()
         self.assertIn("GrapeBadgeBridge.syncCachedAsync(context.getApplicationContext())", settings)
+
+    def test_cache_is_signature_verified_before_use(self):
+        path = os.path.join(ROOT, "client", "overlay", "java", "app",
+                            "grapegram", "GrapeBadges.java")
+        with open(path, encoding="utf-8") as source_file:
+            source = source_file.read()
+        self.assertIn('CACHE_SIGNATURE = "badge_cache.json.sig"', source)
+        self.assertIn("if (!verify(GrapeConfig.PUBLIC_KEY_PEM, data, signature))", source)
+        self.assertIn("parseDocument(data)", source)
+        self.assertIn("withCacheBust(", source)
+        self.assertIn("for (int attempt = 0; attempt < 3; attempt++)", source)
 
     def test_developer_badge_uses_developer_status(self):
         path = os.path.join(ROOT, "client", "overlay", "java", "app",

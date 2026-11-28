@@ -205,10 +205,21 @@ fn cmd_apply_change(opts: &HashMap<String, String>) -> Res<i32> {
         .ok_or("bad owner_users.json")?;
     let owner_list: Vec<String> = owners
         .iter()
-        .filter_map(|value| value.as_str().map(str::to_string))
-        .collect();
-    if !owner_id.is_empty() && !owner_list.iter().any(|owner| owner == &owner_id) {
-        return Err("OWNER_ID is not in owner_users.json".into());
+        .map(|value| {
+            value.as_str()
+                .map(str::to_string)
+                .ok_or("owner_users.json contains a non-string owner ID")
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if owner_list.len() != 2
+            || owner_list.iter().any(|owner| !valid_id(owner))
+            || owner_list[0] == owner_list[1] {
+        return Err("owner_users.json must contain exactly two unique numeric IDs".into());
+    }
+    // OWNER_ID must come from the authenticated Telegram/admin caller.
+    // Never allow an omitted identity to bypass the owner allow-list.
+    if !is_authorized_owner(&owner_id, &owner_list) {
+        return Err("OWNER_ID is missing or is not in owner_users.json".into());
     }
 
     let path = data.join("badge_users.json");
@@ -260,11 +271,7 @@ fn cmd_apply_change(opts: &HashMap<String, String>) -> Res<i32> {
     let encoded = format!("{}\n", STANDARD.encode(signature));
     atomic_write(&signature_path, encoded.as_bytes())?;
 
-    let actor = if owner_id.is_empty() {
-        std::env::var("GITHUB_ACTOR").unwrap_or_else(|_| "unknown".to_string())
-    } else {
-        owner_id.clone()
-    };
+    let actor = owner_id.clone();
     let record = json!({
         "action": &action,
         "target": user_id,
@@ -283,6 +290,10 @@ fn cmd_apply_change(opts: &HashMap<String, String>) -> Res<i32> {
     writeln!(audit, "{}", serde_json::to_string(&record)?)?;
     println!("{action} {badge} -> {user_id}, version {version}");
     Ok(0)
+}
+
+fn is_authorized_owner(owner_id: &str, owners: &[String]) -> bool {
+    valid_id(owner_id) && owners.iter().any(|owner| owner == owner_id)
 }
 
 fn valid_id(id: &str) -> bool {
@@ -344,6 +355,16 @@ mod tests {
         assert!(!valid_id(&"1".repeat(21)));
         assert!(!valid_id("1234a"));
         assert!(!valid_id("12 45"));
+    }
+
+    #[test]
+    fn owner_allowlist_rejects_missing_and_unknown_ids() {
+        let owners = vec!["7293365262".to_string(), "960792706".to_string()];
+        assert!(is_authorized_owner("7293365262", &owners));
+        assert!(is_authorized_owner("960792706", &owners));
+        assert!(!is_authorized_owner("", &owners));
+        assert!(!is_authorized_owner("123456789", &owners));
+        assert!(!is_authorized_owner("owner", &owners));
     }
 
     #[test]

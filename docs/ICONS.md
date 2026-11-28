@@ -18,8 +18,9 @@
 
 ## Реализация
 
-- 9 `<activity-alias>` для launcher-активности, у каждого свой
-  `android:icon="@mipmap/ic_launcher_grape_N"`.
+- 9 grapeGram `<activity-alias>` для launcher-активности; в меню выбора
+  отображаются только они. У каждого свой ресурс `@drawable/grape_icon_*`.
+- Унаследованные exteraless aliases выключены и не показываются в выборе.
 - `IconManager` хранит выбор в одном ключе `grape_icon` (значение — имя иконки
   из `icons.json`, по умолчанию `grapegram_original_first`).
 - Применение: `setComponentEnabledSetting` — включить выбранный alias,
@@ -35,3 +36,13 @@
 
 Выбор в обоих местах, сохранение после перезапуска, отсутствие дублей в
 launcher, прозрачность углов, отсутствие чёрной рамки, splash на Android 12+.
+
+
+## Cherrygram icon pack
+
+The materializer imports 18 Cherrygram launcher variants (including dark, white,
+laguna, aqua, green, lavanda, violet sunset, sunset, sunrise, palms, Turbo, Nox,
+and Dark NY variants). Their vector foreground/background assets are preserved
+from Cherrygram's `res-cherrygram/drawable` resources and assembled into
+grapeGram-specific adaptive-icon aliases. They appear alongside the nine
+grapeGram originals in the shared icon picker.
