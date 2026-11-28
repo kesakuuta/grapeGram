@@ -121,7 +121,9 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
         int primaryLeft = primary == null ? left : left + (reverse ? size + gap : 0);
         if (primary != null) {
             primary.setBounds(primaryLeft, top, primaryLeft + size, top + size);
-            primary.setAlpha(combinedAlpha);
+            // The configured alpha belongs to the grapeGram marker only;
+            // do not dim Telegram's existing Premium/emoji/verified status.
+            primary.setAlpha(viewAlpha);
             primary.draw(canvas);
         }
 
