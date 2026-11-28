@@ -566,14 +566,20 @@ fn run() -> Result<(), String> {
     )?;
     user_cell = patch_once(
         &user_cell,
+        "        if (id == NotificationCenter.emojiLoaded) {\n            nameTextView.invalidate();\n        }\n",
+        "        if (id == NotificationCenter.emojiLoaded) {\n            nameTextView.invalidate();\n        } else if (id == NotificationCenter.updateInterfaces && account == currentAccount) {\n            int mask = args != null && args.length > 0 && args[0] instanceof Integer\n                    ? (Integer) args[0] : 0;\n            if ((mask & MessagesController.UPDATE_MASK_EMOJI_STATUS) != 0) {\n                update(0);\n            }\n        }\n",
+        "UserCell badge refresh notification",
+    )?;
+    user_cell = patch_once(
+        &user_cell,
         "        emojiStatus.attach();\n        botVerification.attach();\n",
-        "        emojiStatus.attach();\n        botVerification.attach();\n        grapeBadge.attach();\n",
+        "        emojiStatus.attach();\n        botVerification.attach();\n        grapeBadge.attach();\n        NotificationCenter.getInstance(currentAccount).addObserver(this, NotificationCenter.updateInterfaces);\n",
         "UserCell badge attach",
     )?;
     user_cell = patch_once(
         &user_cell,
         "        emojiStatus.detach();\n        botVerification.detach();\n",
-        "        emojiStatus.detach();\n        botVerification.detach();\n        grapeBadge.detach();\n",
+        "        emojiStatus.detach();\n        botVerification.detach();\n        grapeBadge.detach();\n        NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.updateInterfaces);\n",
         "UserCell badge detach",
     )?;
     write_file(&user_cell_path, &user_cell)?;
