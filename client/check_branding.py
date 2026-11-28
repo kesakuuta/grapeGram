@@ -69,7 +69,9 @@ def check_resources(root: Path) -> list[str]:
             errors.append(f"{path.relative_to(root)}: malformed XML: {exc}")
             continue
         for element in tree.iter():
-            value = "".join(element.itertext()).strip()
+            if list(element):
+                continue
+            value = (element.text or "").strip()
             if "exteraless" in value.lower():
                 errors.append(
                     f"{path.relative_to(root)}: resource text still contains legacy branding: {value!r}"
