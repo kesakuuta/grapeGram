@@ -466,6 +466,10 @@ class Handler(BaseHTTPRequestHandler):
             name = os.path.basename(self.path)
             if name == "audit.jsonl":
                 try:
+                    STORE.require_owner(self._auth())
+                except PermissionError as e:
+                    return self._json(403, {"error": str(e)})
+                try:
                     data = STORE.read_audit()
                 except Exception:
                     return self._json(502, {"error": "audit log is temporarily unavailable"})
