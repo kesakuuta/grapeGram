@@ -622,6 +622,277 @@ fn upstream_string_entries() -> String {
     format!("{}{}", cherry, extera)
 }
 
+fn patch_branding_storage(proj: &Path) -> Result<(), String> {
+    let constants_path = proj.join("src/main/java/app/exteraless/plugins/PluginsConstants.java");
+    let mut constants = read_file(&constants_path)?;
+    constants = patch_once(
+        &constants,
+        "package app.exteraless.plugins;\n",
+        "package app.exteraless.plugins;\n\nimport android.content.Context;\nimport android.content.SharedPreferences;\n\nimport java.util.HashSet;\nimport java.util.Map;\nimport java.util.Set;\n",
+        "plugin preferences migration imports",
+    )?;
+    constants = patch_once(
+        &constants,
+        "public static final String PREFS_NAME = \"exteraless_plugins\";",
+        "public static final String PREFS_NAME = \"grapegram_plugins\";\n    public static final String LEGACY_PREFS_NAME = \"exteraless_plugins\";\n    private static final String KEY_BRANDING_MIGRATED = \"__grapegram_branding_migrated_v1\";",
+        "rename plugin preferences",
+    )?;
+    constants = patch_once(
+        &constants,
+        "    private PluginsConstants() {\n    }\n",
+        r#"    private PluginsConstants() {
+    }
+
+    /** Copies legacy exteraless preferences once and keeps the old file intact. */
+    public static SharedPreferences getPreferences(Context context) {
+        SharedPreferences current = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        if (current.getBoolean(KEY_BRANDING_MIGRATED, false)) {
+            return current;
+        }
+        SharedPreferences legacy = context.getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = current.edit();
+        for (Map.Entry<String, ?> entry : legacy.getAll().entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if (key == null || current.contains(key) || KEY_BRANDING_MIGRATED.equals(key)) {
+                continue;
+            }
+            if (value instanceof String) {
+                editor.putString(key, (String) value);
+            } else if (value instanceof Integer) {
+                editor.putInt(key, (Integer) value);
+            } else if (value instanceof Long) {
+                editor.putLong(key, (Long) value);
+            } else if (value instanceof Boolean) {
+                editor.putBoolean(key, (Boolean) value);
+            } else if (value instanceof Float) {
+                editor.putFloat(key, (Float) value);
+            } else if (value instanceof Set<?>) {
+                HashSet<String> copy = new HashSet<>();
+                for (Object item : (Set<?>) value) {
+                    if (item instanceof String) {
+                        copy.add((String) item);
+                    }
+                }
+                editor.putStringSet(key, copy);
+            }
+        }
+        if (!editor.putBoolean(KEY_BRANDING_MIGRATED, true).commit()) {
+            return legacy;
+        }
+        return current;
+    }
+"#,
+        "plugin preference migration method",
+    )?;
+    write_file(&constants_path, &constants)?;
+
+    let controller_path = proj.join("src/main/java/app/exteraless/plugins/PluginsController.java");
+    let mut controller = read_file(&controller_path)?;
+    controller = patch_once(
+        &controller,
+        "preferences = appContext.getSharedPreferences(PluginsConstants.PREFS_NAME, Context.MODE_PRIVATE);",
+        "preferences = PluginsConstants.getPreferences(appContext);",
+        "use migrated plugin preferences in controller",
+    )?;
+    write_file(&controller_path, &controller)?;
+
+    let backup_path = proj.join("src/main/java/app/exteraless/backup/EtgBackup.java");
+    let mut backup = read_file(&backup_path)?;
+    backup = patch_once(
+        &backup,
+        r#"return ApplicationLoader.applicationContext
+                .getSharedPreferences(PluginsConstants.PREFS_NAME, Context.MODE_PRIVATE);"#,
+        "return PluginsConstants.getPreferences(ApplicationLoader.applicationContext);",
+        "use migrated plugin preferences in backups",
+    )?;
+    write_file(&backup_path, &backup)?;
+
+    let grant_path = proj.join("src/main/java/app/exteraless/plugins/PluginGrantStore.java");
+    let mut grants = read_file(&grant_path)?;
+    grants = patch_once(
+        &grants,
+        "static final String PREFS_NAME = \"exteraless_plugin_grants\";",
+        "static final String PREFS_NAME = \"grapegram_plugin_grants\";\n    private static final String LEGACY_PREFS_NAME = \"exteraless_plugin_grants\";",
+        "rename plugin grant preferences",
+    )?;
+    grants = patch_once(
+        &grants,
+        r#"            store = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            if (!store.getBoolean(KEY_MIGRATED, false)) {
+                SharedPreferences legacy = context.getSharedPreferences(PluginsConstants.PREFS_NAME, Context.MODE_PRIVATE);
+                if (!migrate(legacy, store)) {
+                    return legacy;
+                }
+            }"#,
+        r#"            store = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            if (!store.getBoolean(KEY_MIGRATED, false)) {
+                SharedPreferences legacyDedicated = context.getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE);
+                SharedPreferences legacyGeneral = PluginsConstants.getPreferences(context);
+                if (!migrate(legacyDedicated, store) || !migrate(legacyGeneral, store)
+                        || !store.edit().putBoolean(KEY_MIGRATED, true).commit()) {
+                    SharedPreferences fallback = SignedGrantPreferences.wrap(
+                            legacyDedicated, PluginGrantStore::isGrantKey);
+                    preferences = fallback;
+                    return fallback;
+                }
+            }"#,
+        "migrate legacy plugin grant preferences",
+    )?;
+    grants = patch_once(
+        &grants,
+        r#"        if (target instanceof String) {
+            return PREFS_NAME.equals(target);
+        }
+        return target instanceof File && (PREFS_NAME + ".xml").equals(((File) target).getName());"#,
+        r#"        if (target instanceof String) {
+            return PREFS_NAME.equals(target) || LEGACY_PREFS_NAME.equals(target);
+        }
+        if (target instanceof File) {
+            String name = ((File) target).getName();
+            return (PREFS_NAME + ".xml").equals(name) || (LEGACY_PREFS_NAME + ".xml").equals(name);
+        }
+        return false;"#,
+        "recognise old and new plugin grant stores",
+    )?;
+    grants = patch_once(
+        &grants,
+        r#"    private static boolean migrate(SharedPreferences from, SharedPreferences to) {
+        SharedPreferences.Editor moved = to.edit();
+        SharedPreferences.Editor cleared = from.edit();
+        int count = 0;
+        for (Map.Entry<String, ?> entry : from.getAll().entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if (key == null || !isGrantKey(key)) {
+                continue;
+            }
+            if (value instanceof String) {
+                moved.putString(key, (String) value);
+            } else if (value instanceof Integer) {
+                moved.putInt(key, (Integer) value);
+            } else if (value instanceof Boolean) {
+                moved.putBoolean(key, (Boolean) value);
+            }
+            cleared.remove(key);
+            count++;
+        }
+        if (!moved.putBoolean(KEY_MIGRATED, true).commit()) {
+            FileLog.e("PluginGrantStore: migration failed, keeping grants in place");
+            return false;
+        }
+        cleared.commit();
+        FileLog.d("PluginGrantStore: moved " + count + " grant records");
+        return true;
+    }"#,
+        r#"    private static boolean migrate(SharedPreferences from, SharedPreferences to) {
+        SharedPreferences.Editor moved = to.edit();
+        int count = 0;
+        for (Map.Entry<String, ?> entry : from.getAll().entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if (key == null || !isGrantKey(key) || to.contains(key)) {
+                continue;
+            }
+            if (value instanceof String) {
+                moved.putString(key, (String) value);
+            } else if (value instanceof Integer) {
+                moved.putInt(key, (Integer) value);
+            } else if (value instanceof Boolean) {
+                moved.putBoolean(key, (Boolean) value);
+            }
+            count++;
+        }
+        if (!moved.commit()) {
+            FileLog.e("PluginGrantStore: migration failed, keeping legacy grants in place");
+            return false;
+        }
+        FileLog.d("PluginGrantStore: copied " + count + " grant records");
+        return true;
+    }"#,
+        "preserve legacy plugin grant data during migration",
+    )?;
+    write_file(&grant_path, &grants)?;
+
+    let badge_path = proj.join("src/main/java/com/exteragram/messenger/badges/BadgesController.java");
+    let mut badges = read_file(&badge_path)?;
+    badges = patch_once(
+        &badges,
+        "import java.util.function.Consumer;",
+        "import java.util.Map;\nimport java.util.function.Consumer;",
+        "badge preference migration import",
+    )?;
+    badges = patch_once(
+        &badges,
+        "    private static final String PREFS_NAME = \"exteraless_badges\";",
+        "    private static final String PREFS_NAME = \"grapegram_badges\";\n    private static final String LEGACY_PREFS_NAME = \"exteraless_badges\";\n    private static volatile boolean prefsMigrated;",
+        "rename badge preferences",
+    )?;
+    badges = patch_once(
+        &badges,
+        r#"    private static SharedPreferences prefs() {
+        return ApplicationLoader.applicationContext.getSharedPreferences(PREFS_NAME, 0);
+    }"#,
+        r#"    private static SharedPreferences prefs() {
+        android.content.Context context = ApplicationLoader.applicationContext;
+        SharedPreferences current = context.getSharedPreferences(PREFS_NAME, 0);
+        if (!prefsMigrated) {
+            synchronized (BadgesController.class) {
+                if (!prefsMigrated) {
+                    SharedPreferences legacy = context.getSharedPreferences(LEGACY_PREFS_NAME, 0);
+                    if (current.getAll().isEmpty()) {
+                        SharedPreferences.Editor editor = current.edit();
+                        for (Map.Entry<String, ?> entry : legacy.getAll().entrySet()) {
+                            Object value = entry.getValue();
+                            if (value instanceof Long) {
+                                editor.putLong(entry.getKey(), (Long) value);
+                            } else if (value instanceof String) {
+                                editor.putString(entry.getKey(), (String) value);
+                            }
+                        }
+                        if (!editor.commit()) {
+                            return legacy;
+                        }
+                    }
+                    prefsMigrated = true;
+                }
+            }
+        }
+        return current;
+    }"#,
+        "migrate legacy badge preferences",
+    )?;
+    write_file(&badge_path, &badges)?;
+
+    let log_path = proj.join("src/main/java/app/exteraless/plugins/PluginLog.java");
+    let mut log = read_file(&log_path)?;
+    log = patch_once(
+        &log,
+        "String header = \"exteraless \" + BuildConfig.BUILD_VERSION_STRING",
+        "String header = \"grapeGram \" + BuildConfig.BUILD_VERSION_STRING",
+        "rebrand exported plugin log header",
+    )?;
+    write_file(&log_path, &log)?;
+
+    let app_icons_path = proj.join("src/main/java/app/exteraless/appicons/AppIcons.java");
+    let mut app_icons = read_file(&app_icons_path)?;
+    app_icons = patch_once(
+        &app_icons,
+        "        DESCRIPTIONS.put(\"EXTERALESS\", R.string.AppIconInfoExteraless);\n",
+        "",
+        "hide legacy exteraless launcher icon description",
+    )?;
+    app_icons = patch_once(
+        &app_icons,
+        "        for (LauncherIcon icon : LauncherIcon.values()) {\n            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O",
+        "        for (LauncherIcon icon : LauncherIcon.values()) {\n            if (icon == LauncherIcon.EXTERALESS) {\n                continue;\n            }\n            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O",
+        "hide legacy exteraless launcher icon",
+    )?;
+    write_file(&app_icons_path, &app_icons)?;
+
+    Ok(())
+}
+
 fn run() -> Result<(), String> {
     let args = parse_args()?;
     let extra_base = args.config.as_ref().and_then(|p| p.parent()).map(|p| p.to_path_buf());
@@ -684,6 +955,7 @@ fn run() -> Result<(), String> {
 
     copy_dir(&client_dir.join("overlay/java"), &proj.join("src/main/java"))?;
     copy_dir(&client_dir.join("overlay/res"), &proj.join("src/main/res"))?;
+    patch_branding_storage(&proj)?;
     let removed_launcher_pngs = remove_duplicate_launcher_pngs(&proj.join("src/main/res"))?;
     println!("removed {} upstream PNGs shadowed by overlay launcher WebP assets", removed_launcher_pngs);
 
