@@ -38,6 +38,9 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
     private int designRow;
     private int studioRow;
     private int designShadowRow;
+    private int aboutHeaderRow;
+    private int aboutRow;
+    private int aboutShadowRow;
     private int licenseHeaderRow;
     private int licenseRow;
     private int licenseShadowRow;
@@ -61,6 +64,9 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
         designRow = addRow();
         studioRow = addRow();
         designShadowRow = addRow();
+        aboutHeaderRow = addRow();
+        aboutRow = addRow();
+        aboutShadowRow = addRow();
         licenseHeaderRow = addRow();
         licenseRow = addRow();
         licenseShadowRow = addRow();
@@ -126,6 +132,8 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
                         headerCell.setText("Сообщества");
                     } else if (position == designHeaderRow) {
                         headerCell.setText("Дизайн");
+                    } else if (position == aboutHeaderRow) {
+                        headerCell.setText("О grapeGram");
                     } else if (position == licenseHeaderRow) {
                         headerCell.setText("Лицензия");
                     }
@@ -135,7 +143,12 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
                     TextInfoPrivacyCell cell = (TextInfoPrivacyCell) holder.itemView;
                     cell.setBackground(Theme.getThemedDrawable(mContext,
                             R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
-                    if (position == licenseRow) {
+                    if (position == aboutRow) {
+                        cell.setText("grapeGram — независимый Android-клиент на основе закреплённой версии exteraless. "
+                                + "Проект объединяет расширенные настройки, плагины, AyuMoments, AI и систему "
+                                + "подписанных пользовательских бейджей. Это неофициальный проект, не связанный "
+                                + "с Telegram и авторами перечисленных upstream-клиентов.");
+                    } else if (position == licenseRow) {
                         cell.setText("Лицензии проектов: grapeGram, exteraGram и exteraless — GNU GPL-3.0; "
                                 + "Cherrygram — GNU GPL-2.0. "
                                 + "Иконки и компоненты сохраняют условия и авторские сведения исходных проектов. "
@@ -183,7 +196,7 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
                     || position == designShadowRow || position == licenseShadowRow) {
                 return TYPE_SHADOW;
             }
-            if (position == licenseRow) {
+            if (position == aboutRow || position == licenseRow) {
                 return TYPE_INFO_PRIVACY;
             }
             return TYPE_SETTINGS;
