@@ -395,6 +395,14 @@ class SettingsRegressionTests(unittest.TestCase):
             settings = source_file.read()
         self.assertIn("public class GrapeSettingsActivity extends BaseFragment", settings)
 
+    def test_profile_badge_particles_are_patched_once(self):
+        path = os.path.join(ROOT, "rust", "materializer", "src", "main.rs")
+        with open(path, encoding="utf-8") as source_file:
+            source = source_file.read()
+        self.assertEqual(source.count('"badge particles"'), 1)
+        self.assertEqual(source.count('"grapeGram profile badge particles"'), 0)
+        self.assertEqual(source.count('badgeDrawable.setParticles(true, animated);'), 1)
+
     def test_notification_icon_patch_replaces_method_without_format_fragility(self):
         path = os.path.join(ROOT, "rust", "materializer", "src", "main.rs")
         with open(path, encoding="utf-8") as source_file:

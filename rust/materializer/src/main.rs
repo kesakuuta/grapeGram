@@ -1317,16 +1317,6 @@ fn run() -> Result<(), String> {
     }
     write_file(&plugins_path, &plugins)?;
 
-    let profile_path = proj.join("src/main/java/org/telegram/ui/ProfileActivity.java");
-    let mut profile = read_file(&profile_path)?;
-    profile = patch_once(
-        &profile,
-        "        badgeDrawable.setParticles(false, animated);",
-        "        badgeDrawable.setParticles(true, animated);",
-        "grapeGram profile badge particles",
-    )?;
-    write_file(&profile_path, &profile)?;
-
     let chat_avatar_path = proj.join("src/main/java/org/telegram/ui/Components/ChatAvatarContainer.java");
     let mut chat_avatar = read_file(&chat_avatar_path)?;
     chat_avatar = patch_once(
