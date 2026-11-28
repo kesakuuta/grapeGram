@@ -43,6 +43,9 @@ public class StatusBadgeComponent {
     }
 
     public Drawable updateDrawable(TLRPC.User user, TLRPC.Chat chat, int colorFilter, boolean animated) {
+        if (currentDrawable instanceof GrapeBadgeDrawable) {
+            ((GrapeBadgeDrawable) currentDrawable).setCallback(null);
+        }
         boolean hasStatus = false;
         if (chat != null && chat.verified) {
             statusDrawable.set(verifiedDrawable = (verifiedDrawable == null ? new CombinedDrawable(Theme.dialogs_verifiedDrawable, Theme.dialogs_verifiedCheckDrawable) : verifiedDrawable), animated);
