@@ -163,11 +163,22 @@ class StoreTests(unittest.TestCase):
             shutil.copy(os.path.join(ROOT, "data", n), self.data)
         self.priv, self.pub = make_key(self.tmp)
         os.environ["GRP_SIGNING_KEY_FILE"] = self.priv
+        self.old_publisher = server.publish_badge_files
+        server.publish_badge_files = lambda data, signature: None
         self.store = server.Store(self.data)
 
     def tearDown(self):
+        server.publish_badge_files = self.old_publisher
         os.environ.pop("GRP_SIGNING_KEY_FILE", None)
         shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_challenges_and_sessions_survive_restart(self):
+        code = self.store.new_challenge()
+        restored = server.Store(self.data)
+        self.assertIn(code, restored.challenges)
+        token = restored.bind(code, OWNERS[0])
+        restored_again = server.Store(self.data)
+        self.assertEqual(restored_again.require_owner(token), OWNERS[0])
 
     def test_challenge_single_use(self):
         code = self.store.new_challenge()
