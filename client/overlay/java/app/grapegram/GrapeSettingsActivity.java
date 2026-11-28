@@ -3,14 +3,9 @@ package app.grapegram;
 import android.content.Context;
 import android.view.View;
 import android.widget.FrameLayout;
-import android.widget.Toast;
 
-import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
-import org.telegram.messenger.Utilities;
 import org.telegram.ui.ActionBar.ActionBar;
-import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.IconBackgroundColors;
@@ -120,7 +115,7 @@ public class GrapeSettingsActivity extends BaseFragment {
                 presentFragment(new PluginsActivity());
                 break;
             case ID_BADGES:
-                showBadges();
+                presentFragment(new GrapeBadgesActivity());
                 break;
             case ID_CREDITS:
                 presentFragment(new GrapeCreditsActivity());
@@ -130,65 +125,4 @@ public class GrapeSettingsActivity extends BaseFragment {
         }
     }
 
-    private void showBadges() {
-        final Context context = getParentActivity();
-        if (context == null) {
-            return;
-        }
-        final AlertDialog progress = new AlertDialog(context, AlertDialog.ALERT_TYPE_SPINNER);
-        progress.setCanCancel(true);
-        progress.show();
-        Utilities.globalQueue.postRunnable(() -> {
-            final GrapeBadges.Result result = GrapeBadges.load(context.getApplicationContext(), true);
-            AndroidUtilities.runOnUIThread(() -> {
-                try {
-                    progress.dismiss();
-                } catch (Throwable ignored) {
-                }
-                if (!result.ok) {
-                    long ownerId = org.telegram.messenger.UserConfig.getInstance(
-                            org.telegram.messenger.UserConfig.selectedAccount).clientUserId;
-                    if (GrapeConfig.isBadgeOwner(ownerId)) {
-                        new AlertDialog.Builder(context)
-                                .setTitle("Бейджи")
-                                .setMessage("Не удалось загрузить подписанный список: " + result.error)
-                                .setPositiveButton(LocaleController.getString(R.string.OK), null)
-                                .setNeutralButton("Управление", (dialog, which) ->
-                                        presentFragment(new GrapeBadgeAdminActivity()))
-                                .show();
-                    } else {
-                        toast("Бейджи: " + result.error);
-                    }
-                    return;
-                }
-                GrapeBadgeBridge.sync(context.getApplicationContext(), result);
-                StringBuilder sb = new StringBuilder();
-                for (GrapeBadges.Entry e : result.entries) {
-                    if (e.enabled) {
-                        sb.append(e.userId).append(" — ").append(e.badge).append('\n');
-                    }
-                }
-                if (sb.length() == 0) {
-                    sb.append("Пока никому не выданы");
-                }
-                AlertDialog.Builder builder = new AlertDialog.Builder(context)
-                        .setTitle("Бейджи · v" + result.version)
-                        .setMessage(sb.toString().trim())
-                        .setPositiveButton(LocaleController.getString(R.string.OK), null);
-                long currentUserId = org.telegram.messenger.UserConfig.getInstance(
-                        org.telegram.messenger.UserConfig.selectedAccount).clientUserId;
-                if (GrapeConfig.isBadgeOwner(currentUserId)) {
-                    builder.setNeutralButton("Управление", (dialog, which) ->
-                            presentFragment(new GrapeBadgeAdminActivity()));
-                }
-                builder.show();
-            });
-        });
-    }
-
-    private void toast(String text) {
-        if (getParentActivity() != null) {
-            Toast.makeText(getParentActivity(), text, Toast.LENGTH_SHORT).show();
-        }
-    }
 }
