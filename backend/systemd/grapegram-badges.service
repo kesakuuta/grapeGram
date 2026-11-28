@@ -1,0 +1,26 @@
+[Unit]
+Description=grapeGram signed badge API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=grapegram
+Group=grapegram
+WorkingDirectory=/opt/grapegram
+EnvironmentFile=/etc/grapegram/badges.env
+ExecStart=/usr/bin/python3 /opt/grapegram/backend/server.py
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/opt/grapegram/data /var/lib/grapegram
+
+[Install]
+WantedBy=multi-user.target
