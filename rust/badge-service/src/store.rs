@@ -444,7 +444,9 @@ mod tests {
         let (store, directory) = test_store("badge-signature");
         let path = directory.join("badge_users.json");
         fs::write(&path, r#"{"version":1,"updated_at":"2026-01-01T00:00:00Z","badges":{"111111111":{"badge":"founder","enabled":true,"record_version":1}}}"#).unwrap();
-        let result = store.mutate("missing-session", "555555555", "grapegram", true, "", None);
+        let code = store.new_challenge().unwrap();
+        let session = store.bind(&code, "7293365262").unwrap();
+        let result = store.mutate(&session, "555555555", "grapegram", true, "", None);
         assert!(result.is_err());
         cleanup(&directory);
     }
