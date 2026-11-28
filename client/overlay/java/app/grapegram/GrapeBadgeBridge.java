@@ -30,8 +30,19 @@ public final class GrapeBadgeBridge {
     private GrapeBadgeBridge() {
     }
 
+    /** Refreshes the signed list on app startup, then applies the verified cache. */
     public static void syncAsync(Context context) {
-        Utilities.globalQueue.postRunnable(() -> sync(context.getApplicationContext()));
+        final Context appContext = context.getApplicationContext();
+        Utilities.globalQueue.postRunnable(() -> {
+            GrapeBadges.load(appContext, true);
+            sync(appContext);
+        });
+    }
+
+    /** Applies an already refreshed cache without making a duplicate network request. */
+    public static void syncCachedAsync(Context context) {
+        final Context appContext = context.getApplicationContext();
+        Utilities.globalQueue.postRunnable(() -> sync(appContext));
     }
 
     public static synchronized void sync(Context context) {
