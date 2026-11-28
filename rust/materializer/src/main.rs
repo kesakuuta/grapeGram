@@ -141,6 +141,11 @@ fn patch_once(text: &str, anchor: &str, replacement: &str, what: &str) -> Result
     Ok(text.replacen(anchor, replacement, 1))
 }
 
+fn patch_bouncycastle_dependencies(build: &str) -> Result<String, String> {
+    let replacement = "configurations.configureEach {\n    resolutionStrategy.dependencySubstitution {\n        substitute(module('org.bouncycastle:bcprov-jdk15to18')).using(module('org.bouncycastle:bcprov-jdk18on:1.83'))\n    }\n}\n\ndependencies {\n    implementation 'org.bouncycastle:bcprov-jdk18on:1.83'\n";
+    patch_once(build, "dependencies {\n", replacement, "Bouncy Castle dependency substitution")
+}
+
 /// Replaces the old app name inside `<string>` text nodes only, so resource names
 /// such as `exteraless_icon_tile` and `@drawable/...` references stay intact.
 fn rebrand_xml_strings(text: &str) -> String {
@@ -819,9 +824,9 @@ fn run() -> Result<(), String> {
         "    signingConfigs {\n        release {\n            storeType 'PKCS12'\n",
         "signingConfigs.release",
     )?;
-    // Do not pin bcprov-jdk15to18 here. The base app already resolves
-    // bcprov-jdk18on transitively; adding the legacy artifact duplicates
-    // every org.bouncycastle class and makes AGP checkReleaseDuplicateClasses fail.
+    // GrapeBadges uses BC lightweight Ed25519 classes. Replace any legacy
+    // transitive provider with one maintained artifact to avoid duplicate classes.
+    build = patch_bouncycastle_dependencies(&build)?;
     build = patch_once(&build, "            version '3.11'", "            version = '3.11'", "chaquopy version assignment")?;
     build = patch_once(&build, "        aidl true", "        aidl = true", "aidl assignment")?;
     build = patch_once(
@@ -1034,6 +1039,8 @@ fn run() -> Result<(), String> {
     let build = read_file(&build_path)?;
     expect_count(&build, "defaultConfig.applicationId = APP_PACKAGE", 1, "verify applicationId")?;
     expect_count(&build, "storeType 'PKCS12'", 1, "verify signing storeType")?;
+    expect_count(&build, "implementation 'org.bouncycastle:bcprov-jdk18on:1.83'", 1, "verify Ed25519 provider dependency")?;
+    expect_count(&build, "substitute(module('org.bouncycastle:bcprov-jdk15to18')).using(module('org.bouncycastle:bcprov-jdk18on:1.83'))", 1, "verify legacy provider substitution")?;
     let gs: Value = serde_json::from_str(&read_file(&gs_path)?)
         .map_err(|e| format!("verify google-services.json: {}", e))?;
     let clients = gs.get("client").and_then(Value::as_array).ok_or("verify: client array missing")?;
@@ -1075,6 +1082,15 @@ mod tests {
         assert_eq!(patch_once("a X b", "X", "Y", "t").unwrap(), "a Y b");
         assert!(patch_once("a X X b", "X", "Y", "t").is_err());
         assert!(patch_once("a b", "X", "Y", "t").is_err());
+    }
+
+    #[test]
+    fn bouncycastle_dependency_is_substituted_and_added_once() {
+        let input = "plugins {}\\ndependencies {\\n}\\n";
+        let output = patch_bouncycastle_dependencies(input).unwrap();
+        assert_eq!(output.matches("implementation 'org.bouncycastle:bcprov-jdk18on:1.83'").count(), 1);
+        assert_eq!(output.matches("substitute(module('org.bouncycastle:bcprov-jdk15to18'))").count(), 1);
+        assert!(output.contains("using(module('org.bouncycastle:bcprov-jdk18on:1.83'))"));
     }
 
     #[test]
