@@ -27,22 +27,36 @@
 
 ## Запись (только владельцы)
 
-Клиент не может выдавать бейджи. Схема:
+Сервер находится в `backend/server.py`. Для VPS без домена используется
+Telegram long polling (`backend/bot_polling.py`): входящие порты и webhook
+не требуются.
 
 ```
-App -> POST /challenge                (сервер выдаёт одноразовый код, TTL 5 мин)
-User -> бот: /bind <код>              (бот получает настоящий from.id)
-Server -> POST /bind {code}           (сервер сверяет ID с owner_users.json)
-Server -> POST /admin/grant|revoke    (сессия + owner-check + подпись + commit)
-Server -> GitHub: badge_users.json + .sig + история
-App -> GET (подписанные данные) -> проверка -> отображение
+App -> POST /challenge -> одноразовый код (TTL 5 минут)
+Owner -> Telegram bot: /bind CODE
+Bot -> сервер: настоящий Telegram from.id
+Server -> Telegram sendMessage: короткоживущий Bearer token владельцу
+Admin client -> POST /admin/grant|revoke (Bearer token)
+Server -> Ed25519 подпись -> один GitHub commit с JSON + .sig
+App -> GitHub Raw -> проверка подписи -> отображение
 ```
 
-- Telegram ID берётся **из апдейта бота**, а не из тела запроса приложения.
-- Код одноразовый, живёт 5 минут, привязан к сессии.
-- Приватный ключ и GitHub-токен — только на сервере (или в GitHub Secrets).
-- В APK — только публичный ключ.
+Сессии и challenge хранятся в отдельном state-файле с правами 0600 и
+переживают перезапуск. Challenge одноразовый; сессия живёт 60 минут.
+Права владельца проверяются на сервере при каждой операции.
 
+Для публикации нужны `GRP_GITHUB_TOKEN` (fine-grained token с Contents:
+Read and write только для этого репозитория), `GRP_GITHUB_REPO` и
+`GRP_GITHUB_BRANCH`. JSON и подпись публикуются одним Git-коммитом, чтобы
+клиенты не получили временно несовпадающие версии.
+
+Приватный Ed25519-ключ и Telegram bot token находятся только на VPS.
+Инструкции по установке: [backend/DEPLOY_UBUNTU.md](../backend/DEPLOY_UBUNTU.md).
+
+Android-панель управления ещё не подключена к этим endpoint: backend готов
+к интеграции, но выдача через интерфейс приложения пока не заявляется как
+завершённая.
+ 
 ## Почему не локальный флаг
 
 Локальную проверку ID можно обойти модифицированным клиентом. Поэтому
