@@ -13,10 +13,8 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyFactory;
-import java.security.PublicKey;
-import java.security.Signature;
-import java.security.spec.X509EncodedKeySpec;
+import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
+import org.bouncycastle.crypto.signers.Ed25519Signer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -128,36 +126,37 @@ public final class GrapeBadges {
     }
 
     private static boolean verify(String pem, byte[] data, byte[] sig) {
-        String body = pem.replace("-----BEGIN PUBLIC KEY-----", "")
-                .replace("-----END PUBLIC KEY-----", "").replaceAll("\\s", "");
-        byte[] keyBytes;
-        try {
-            keyBytes = Base64.decode(body, Base64.DEFAULT);
-        } catch (Throwable ignore) {
+        // Use Bouncy Castle's lightweight Ed25519 implementation directly.
+        // Android provider availability differs between OEM builds; relying on
+        // JCA provider names can silently reject valid signatures on some devices.
+        if (sig == null || sig.length != 64 || pem == null) {
             return false;
         }
-        // R8 strips BC's string-named EdDSA providers in release builds, so try the
-        // platform provider (Android 13+) first and fall back to BC if present.
-        String[] providers = {null, "AndroidOpenSSL", "BC", "Conscrypt"};
-        for (String provider : providers) {
-            try {
-                KeyFactory kf = provider == null
-                        ? KeyFactory.getInstance("Ed25519")
-                        : KeyFactory.getInstance("Ed25519", provider);
-                PublicKey key = kf.generatePublic(new X509EncodedKeySpec(keyBytes));
-                Signature s = provider == null
-                        ? Signature.getInstance("Ed25519")
-                        : Signature.getInstance("Ed25519", provider);
-                s.initVerify(key);
-                s.update(data);
-                if (s.verify(sig)) {
-                    return true;
-                }
-            } catch (Throwable ignore) {
-                // try the next provider
+        String body = pem.replace("-----BEGIN PUBLIC KEY-----", "")
+                .replace("-----END PUBLIC KEY-----", "").replaceAll("\\s", "");
+        try {
+            byte[] der = Base64.decode(body, Base64.DEFAULT);
+            // SubjectPublicKeyInfo for Ed25519 is 12 bytes of DER header + 32 raw key bytes.
+            if (der.length != 44
+                    || der[0] != 0x30 || der[1] != 0x2a
+                    || der[2] != 0x30 || der[3] != 0x05
+                    || der[4] != 0x06 || der[5] != 0x03
+                    || der[6] != 0x2b || der[7] != 0x65
+                    || der[8] != 0x70 || der[9] != 0x03
+                    || der[10] != 0x21 || der[11] != 0x00) {
+                return false;
             }
+            byte[] rawKey = new byte[32];
+            System.arraycopy(der, 12, rawKey, 0, rawKey.length);
+            Ed25519PublicKeyParameters publicKey =
+                    new Ed25519PublicKeyParameters(rawKey, 0);
+            Ed25519Signer verifier = new Ed25519Signer();
+            verifier.init(false, publicKey);
+            verifier.update(data, 0, data.length);
+            return verifier.verifySignature(sig);
+        } catch (Throwable ignored) {
+            return false;
         }
-        return false;
     }
 
     private static byte[] get(String url) throws Exception {
