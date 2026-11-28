@@ -1185,12 +1185,9 @@ fn run() -> Result<(), String> {
         "    signingConfigs {\n        release {\n            storeType 'PKCS12'\n",
         "signingConfigs.release",
     )?;
-    build = patch_once(
-        &build,
-        "dependencies {\n",
-        "dependencies {\n    implementation 'org.bouncycastle:bcprov-jdk15to18:1.78'\n",
-        "bouncycastle dependency",
-    )?;
+    // The pinned upstream already brings bcprov-jdk18on transitively. Do not add
+    // bcprov-jdk15to18: it contains the same classes and makes D8 fail with
+    // duplicate-class errors during assembleRelease/bundleRelease.
     build = patch_once(&build, "            version '3.11'", "            version = '3.11'", "chaquopy version assignment")?;
     build = patch_once(&build, "        aidl true", "        aidl = true", "aidl assignment")?;
     build = patch_once(
