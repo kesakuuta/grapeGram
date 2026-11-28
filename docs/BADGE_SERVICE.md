@@ -56,6 +56,9 @@ convenience; server authorization is authoritative.
 - `POST /admin/grant` and `POST /admin/revoke` require
   `Authorization: Bearer <session>`.
 - `GET /healthz` is the health check.
+- `GET /data/audit.jsonl` requires `Authorization: Bearer <session>` and is
+  available only to an authenticated owner. Public signed badge JSON and
+  signature files remain readable without a session.
 
 The style object accepts `color_light` and `color_dark` as `#RRGGBB` or
 `#AARRGGBB`, `alpha` from 0 to 1, `particles` as a boolean, and
