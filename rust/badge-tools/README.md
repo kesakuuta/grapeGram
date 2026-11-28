@@ -1,7 +1,7 @@
 # grape-badge-tools
 
 Rust-реализация инструментов для подписи и проверки данных бейджей grapeGram.
-Соответствует Python-скриптам в `scripts/` по формату канонического JSON,
+Соответствует Python-скриптам в `scripts/` по формату detached Ed25519-подписей,
 именам файлов и правилам валидации. Один бинарник `grape-badge-tools`,
 внешних рантайм-зависимостей (openssl, Python) нет.
 
@@ -17,21 +17,16 @@ cargo test
 `dtolnay/rust-toolchain@stable` (или любой Rust 1.70+). `Cargo.lock`
 генерируется при первой сборке и должен быть закоммичен для `--locked` в CI.
 
-## Канонический JSON
+## Формат подписи
 
-Подпись всегда считается по **каноническим байтам** документа, а не по тому,
-как файл отформатирован на диске. Правила совпадают с `scripts/canonical.py`
-и с Kotlin-проверкой в клиенте:
+Подпись проверяется над **точными байтами файла на диске**. Это одинаково
+работает для Android-клиента, Python badge-service и Rust badge-service.
+`apply-change` записывает JSON в компактном каноническом виде, а затем
+подписывает ровно записанные байты. Команда `sign` подписывает исходный файл
+без его переформатирования.
 
-- ключи объектов отсортированы по коду символа;
-- нет лишних пробелов (разделители `","` и `":"` без пробелов);
-- не-ASCII символы выводятся литерально, не как `\uXXXX`;
-- числа — только целые (дробные и экспоненциальные значения отвергаются);
-- UTF-8 без BOM.
-
-**SHA-256 используется только для целостности/отпечатка** (печатается в
-`sign`/`verify` и пишется в `audit.jsonl`). Он не является подписью и не
-заменяет Ed25519: подлинность подтверждается только подписью Ed25519.
+**SHA-256 используется только для отпечатка** и не заменяет Ed25519:
+подлинность подтверждается только detached Ed25519-подписью.
 
 ## Команды
 
@@ -61,7 +56,7 @@ grape-badge-tools sign \
 ```
 
 На выходе `data/signatures/<basename>.sig` — одна строка base64 из 64 байт
-подписи. Подписываются канонические байты каждого JSON.
+подписи. Подписываются точные байты каждого JSON-файла.
 
 ### Проверка
 
@@ -70,10 +65,9 @@ grape-badge-tools verify --pub data/keys/grapegram_ed25519.pub.pem \
   data/badge_users.json data/signatures/badge_users.json.sig
 ```
 
-Печатает `VALID` или `INVALID`; код выхода `1` при `INVALID`. Сначала
-проверяются канонические байты; если не совпало — исходные байты файла.
-Второй вариант нужен для совместимости со старыми подписями Python-скриптов
-(`sign_data.py` и `apply_change.py` подписывают сырые байты файла).
+Печатает `VALID` или `INVALID`; код выхода `1` при `INVALID`. Проверяется
+подпись точных байтов файла. Для старых записей допускается проверка
+канонического представления только как режим совместимости.
 
 ### Изменение бейджа (только для workflow с одобрением владельца)
 
@@ -83,9 +77,89 @@ OWNER_ID=960792706 GRP_SIGNING_KEY_PEM="$SECRET" GITHUB_ACTOR="$ACTOR" \
 grape-badge-tools apply-change --root .
 ```
 
-Проверяется: `ACTION` ∈ {grant, revoke}, ID по `^[0-9]{5,20}$`, бейдж из
+Проверяется: `ACTION` ∈ {grant, revoke}, ID по `^[0-9]{5,20}# grape-badge-tools
+
+Rust-реализация инструментов для подписи и проверки данных бейджей grapeGram.
+Соответствует Python-скриптам в `scripts/` по формату detached Ed25519-подписей,
+именам файлов и правилам валидации. Один бинарник `grape-badge-tools`,
+внешних рантайм-зависимостей (openssl, Python) нет.
+
+## Сборка и тесты
+
+```bash
+cd rust/badge-tools
+cargo build --release
+cargo test
+```
+
+Бинарник: `target/release/grape-badge-tools`. В CI перед сборкой нужен
+`dtolnay/rust-toolchain@stable` (или любой Rust 1.70+). `Cargo.lock`
+генерируется при первой сборке и должен быть закоммичен для `--locked` в CI.
+
+## Формат подписи
+
+Подпись проверяется над **точными байтами файла на диске**. Это одинаково
+работает для Android-клиента, Python badge-service и Rust badge-service.
+`apply-change` записывает JSON в компактном каноническом виде, а затем
+подписывает ровно записанные байты. Команда `sign` подписывает исходный файл
+без его переформатирования.
+
+**SHA-256 используется только для отпечатка** и не заменяет Ed25519:
+подлинность подтверждается только detached Ed25519-подписью.
+
+## Команды
+
+### Генерация ключей
+
+```bash
+grape-badge-tools gen-keys --out /secure/grapegram_keys
+```
+
+Создаёт `grapegram_ed25519_private.pem` (PKCS#8, режим `0600`) и
+`grapegram_ed25519.pub.pem` (SPKI). Каталог создаётся с режимом `0700`.
+Если файлы уже есть — отказ без перезаписи. Случайное зерно берётся из
+`/dev/urandom` (Linux/Android).
+
+**Приватный ключ никогда не попадает в git, APK, чат или логи.** Единственное
+рабочее место для него — защищённый секрет GitHub Actions
+`GRP_SIGNING_KEY_PEM` либо офлайн-хранилище. В репозитории лежит только
+публичный ключ `data/keys/grapegram_ed25519.pub.pem`.
+
+### Подпись файлов
+
+```bash
+grape-badge-tools sign \
+  --key /secure/grapegram_keys/grapegram_ed25519_private.pem \
+  --out data/signatures \
+  data/badge_users.json data/owner_users.json
+```
+
+На выходе `data/signatures/<basename>.sig` — одна строка base64 из 64 байт
+подписи. Подписываются точные байты каждого JSON-файла.
+
+### Проверка
+
+```bash
+grape-badge-tools verify --pub data/keys/grapegram_ed25519.pub.pem \
+  data/badge_users.json data/signatures/badge_users.json.sig
+```
+
+Печатает `VALID` или `INVALID`; код выхода `1` при `INVALID`. Проверяется
+подпись точных байтов файла. Для старых записей допускается проверка
+канонического представления только как режим совместимости.
+
+### Изменение бейджа (только для workflow с одобрением владельца)
+
+```bash
+ACTION=grant USER_ID=7293365262 BADGE=developer REASON="..." \
+OWNER_ID=960792706 GRP_SIGNING_KEY_PEM="$SECRET" GITHUB_ACTOR="$ACTOR" \
+grape-badge-tools apply-change --root .
+```
+
+, бейдж из
 {grapegram, founder, developer, contributor}, непустой PEM приватного ключа,
-`OWNER_ID` в `data/owner_users.json` (если задан). Затем инкрементируются
+обе detached-подписи (`owner_users.json` и `badge_users.json`) и обязательный
+`OWNER_ID` в подписанном allowlist. Затем инкрементируются
 `version` и `record_version`, проставляется `updated_at` в UTC RFC3339
 (без chrono — из `SystemTime`), переподписывается `badge_users.json`,
 добавляется запись в `data/audit.jsonl`.
