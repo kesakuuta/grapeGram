@@ -311,6 +311,19 @@ class BadgeBridgeRegressionTests(unittest.TestCase):
         self.assertIn('if (!entry.enabled || !isKnownBadge(entry.badge))', source)
         self.assertIn('"contributor".equals(badge)', source)
 
+    def test_startup_refreshes_network_but_manual_sync_reuses_cache(self):
+        bridge_path = os.path.join(ROOT, "client", "overlay", "java", "app",
+                                   "grapegram", "GrapeBadgeBridge.java")
+        with open(bridge_path, encoding="utf-8") as source_file:
+            bridge = source_file.read()
+        self.assertIn("GrapeBadges.load(appContext, true)", bridge)
+        self.assertIn("syncCachedAsync(Context context)", bridge)
+        settings_path = os.path.join(ROOT, "client", "overlay", "java", "app",
+                                     "grapegram", "GrapeSettingsActivity.java")
+        with open(settings_path, encoding="utf-8") as source_file:
+            settings = source_file.read()
+        self.assertIn("GrapeBadgeBridge.syncCachedAsync(context.getApplicationContext())", settings)
+
     def test_developer_badge_uses_developer_status(self):
         path = os.path.join(ROOT, "client", "overlay", "java", "app",
                             "grapegram", "GrapeBadgeBridge.java")
