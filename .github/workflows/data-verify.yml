@@ -6,9 +6,9 @@ concurrency:
 
 on:
   push:
-    paths: ["data/**", "scripts/**", "tests/**"]
+    paths: ["data/**", "scripts/**", "tests/**", "rust/**", "client/**", "backend/**", ".github/workflows/**"]
   pull_request:
-    paths: ["data/**", "scripts/**", "tests/**"]
+    paths: ["data/**", "scripts/**", "tests/**", "rust/**", "client/**", "backend/**", ".github/workflows/**"]
   workflow_dispatch:
 
 jobs:
@@ -21,6 +21,19 @@ jobs:
           python-version: "3.11"
       - name: Tests
         run: python3 -m unittest discover -s tests -v
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Test all Rust crates
+        run: |
+          set -euo pipefail
+          for manifest in \
+            rust/materializer/Cargo.toml \
+            rust/badge-tools/Cargo.toml \
+            rust/badge-service/Cargo.toml \
+            rust/badge-jni/Cargo.toml; do
+            echo "=== cargo test: $manifest ==="
+            cargo test --release --manifest-path "$manifest"
+          done
       - name: Owners are exactly the two project IDs
         run: |
           python3 - <<'PY'
