@@ -129,6 +129,13 @@ jobs:
         run: |
           rust/materializer/target/release/grape-materializer \
             --root "$RUNNER_TEMP/base"
+      - name: Verify Bouncy Castle dependency
+        run: |
+          if grep -q "org.bouncycastle:bcprov-jdk15to18" "$RUNNER_TEMP/base/TMessagesProj/build.gradle"; then
+            echo "::error::legacy Bouncy Castle provider must not be injected"
+            exit 1
+          fi
+          echo "Bouncy Castle: using the pinned base dependency"
       - name: Verify identity patches
         run: |
           grep -q '^APP_PACKAGE=app.grapegram$' "$RUNNER_TEMP/base/gradle.properties"
