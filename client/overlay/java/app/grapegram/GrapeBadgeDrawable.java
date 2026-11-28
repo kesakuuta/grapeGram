@@ -54,10 +54,10 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
         this.styleAlpha = Math.max(0, Math.min(255, alpha));
         this.particles = particles;
         this.animation = animation == null ? "none" : animation;
-        background.setColor(badgeColor);
+        background.setColor(Color.rgb(Color.red(badgeColor), Color.green(badgeColor), Color.blue(badgeColor)));
         colorAlpha = Color.alpha(badgeColor);
         particlesPaint.setColor(Color.WHITE);
-        glowPaint.setColor(badgeColor);
+        glowPaint.setColor(Color.rgb(Color.red(badgeColor), Color.green(badgeColor), Color.blue(badgeColor)));
         if (primary != null) {
             primary.setCallback(this);
         }
