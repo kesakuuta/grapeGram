@@ -15,7 +15,10 @@
 | Проверка подписи | `scripts/verify_data.py` | прогон, tamper-тест |
 | Генерация ключей | `scripts/gen_keys.py` | прогон |
 | 9 иконок, имена, альфа | `assets/icons/` | декодирование PNG |
-| Сервер выдачи (challenge + бот) | `backend/server.py` | unit-тесты логики |
+| Сервер бейджей (сессии, подпись, GitHub publish) | `backend/server.py` | unit-тесты + CI |
+| Telegram long polling + SSH admin CLI | `backend/bot_polling.py`, `backend/admin_cli.py` | Python syntax + CI |
+| Ubuntu VPS deployment | `backend/DEPLOY_UBUNTU.md`, `backend/systemd/` | шаблоны systemd |
+| Badge-only CI (без APK rebuild) | `.github/workflows/badge-data.yml` | success |
 | CI: сборка, проверка данных, подпись | `.github/workflows/` | синтаксис YAML |
 | Оверлей клиента (настройки, иконки, бейджи) | `client/` + `rust/materializer/` | Rust-клиент, проверка якорей |
 | Документация | `docs/` | — |
