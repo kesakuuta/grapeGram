@@ -87,11 +87,15 @@ class ApplyChangeSecurityTests(unittest.TestCase):
         self.assertEqual(sign(self.private_key, payload), signature)  # Ed25519 signatures are deterministic
 
     def test_unlisted_owner_is_rejected(self):
-        before = open(os.path.join(self.data, "badge_users.json"), "rb").read()
+        badge_path = os.path.join(self.data, "badge_users.json")
+        with open(badge_path, "rb") as f:
+            before = f.read()
         result = self.invoke("111111111")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("signed owner allowlist", result.stderr)
-        self.assertEqual(open(os.path.join(self.data, "badge_users.json"), "rb").read(), before)
+        with open(badge_path, "rb") as f:
+            after = f.read()
+        self.assertEqual(after, before)
 
     def test_tampered_owner_allowlist_is_rejected(self):
         path = os.path.join(self.data, "owner_users.json")
