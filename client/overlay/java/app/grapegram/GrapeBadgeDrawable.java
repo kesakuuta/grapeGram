@@ -58,7 +58,7 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
         this.animation = animation == null ? "none" : animation;
         background.setColor(Color.rgb(Color.red(badgeColor), Color.green(badgeColor), Color.blue(badgeColor)));
         colorAlpha = Color.alpha(badgeColor);
-        particlesPaint.setColor(Color.WHITE);
+        particlesPaint.setColor(Color.rgb(Color.red(badgeColor), Color.green(badgeColor), Color.blue(badgeColor)));
         glowPaint.setColor(Color.rgb(Color.red(badgeColor), Color.green(badgeColor), Color.blue(badgeColor)));
         if (primary != null) {
             primary.setCallback(this);
@@ -98,7 +98,7 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
     }
 
     private boolean isAnimated() {
-        return "pulse".equals(animation) || "sparkle".equals(animation) || "glow".equals(animation);
+        return particles || "pulse".equals(animation) || "sparkle".equals(animation) || "glow".equals(animation);
     }
 
     private void scheduleNextFrame() {
@@ -147,17 +147,27 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
         }
 
         if (particles) {
-            int particleAlpha = combinedAlpha;
-            if ("sparkle".equals(animation)) {
-                particleAlpha = combinedAlpha * (int) (90 + 165 * (0.5f + 0.5f * (float) Math.sin(phase * 2.0f))) / 255;
-            } else {
-                particleAlpha = particleAlpha * 170 / 255;
+            // Small orbiting glints stay inside the badge bounds, so they do not
+            // get clipped by Telegram's status-slot layout on compact chat rows.
+            final int count = 5;
+            final float orbit = size * 0.37f;
+            final float baseDot = Math.max(1.0f, size / 15.0f);
+            for (int i = 0; i < count; i++) {
+                float angle = phase * 0.72f + (float) (i * Math.PI * 2.0 / count);
+                float drift = 0.82f + 0.18f * (float) Math.sin(phase + i * 1.31f);
+                float x = cx + (float) Math.cos(angle) * orbit * drift;
+                float y = cy + (float) Math.sin(angle) * orbit * drift;
+                float twinkle = 0.35f + 0.65f
+                        * (0.5f + 0.5f * (float) Math.sin(phase * 2.0f + i * 1.7f));
+                int particleAlpha = (int) (combinedAlpha * colorAlpha / 255.0f * twinkle);
+                if ("sparkle".equals(animation)) {
+                    particleAlpha = Math.min(255, (int) (particleAlpha * 1.18f));
+                }
+                particlesPaint.setAlpha(particleAlpha);
+                float dot = baseDot * (0.75f + 0.45f
+                        * (0.5f + 0.5f * (float) Math.sin(phase + i)));
+                canvas.drawCircle(x, y, dot, particlesPaint);
             }
-            particlesPaint.setAlpha(particleAlpha);
-            float dot = Math.max(1.0f, size / 13.0f);
-            canvas.drawCircle(cx - size * 0.31f, cy - size * 0.27f, dot, particlesPaint);
-            canvas.drawCircle(cx + size * 0.31f, cy - size * 0.16f, dot * 0.75f, particlesPaint);
-            canvas.drawCircle(cx + size * 0.12f, cy + size * 0.34f, dot * 0.65f, particlesPaint);
         }
 
         // Drawable.setCallback() is final on Android. Start the animation from
