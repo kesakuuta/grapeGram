@@ -174,13 +174,19 @@ public final class GrapeBadgeAdminActivity extends BaseFragment {
         Context context = getParentActivity();
         if (context == null) return;
         String base = GrapeConfig.badgeService(context);
+        String session = GrapeConfig.getString(context, SESSION_KEY, "");
         if (base.isEmpty()) {
             toast("Сначала укажи URL badge-service");
+            return;
+        }
+        if (session.isEmpty()) {
+            toast("Сначала подключи владельца через Telegram");
             return;
         }
         Utilities.globalQueue.postRunnable(() -> {
             try {
                 HttpURLConnection connection = (HttpURLConnection) new URL(base + "/data/audit.jsonl").openConnection();
+                connection.setRequestProperty("Authorization", "Bearer " + session);
                 connection.setRequestMethod("GET");
                 connection.setConnectTimeout(60000);
                 connection.setReadTimeout(90000);
