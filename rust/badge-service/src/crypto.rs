@@ -51,6 +51,28 @@ pub fn sign(payload: &[u8], key: &SigningKey) -> String {
     STANDARD.encode(signature.to_bytes())
 }
 
+pub fn verifying_key_from_pem(pem: &str) -> Result<VerifyingKey, ApiError> {
+    let begin = "-----BEGIN PUBLIC KEY-----";
+    let end = "-----END PUBLIC KEY-----";
+    let start = pem.find(begin)
+        .ok_or_else(|| internal("public key PEM header not found"))? + begin.len();
+    let finish = pem.find(end)
+        .ok_or_else(|| internal("public key PEM footer not found"))?;
+    if finish < start {
+        return Err(internal("invalid public key PEM"));
+    }
+    let body: String = pem[start..finish].chars().filter(|c| !c.is_whitespace()).collect();
+    let der = STANDARD.decode(body).map_err(|_| internal("invalid public key base64"))?;
+    let oid: &[u8] = &[0x06, 0x03, 0x2b, 0x65, 0x70];
+    if der.len() < 32 || !der.windows(5).any(|window| window == oid) {
+        return Err(internal("public key is not Ed25519"));
+    }
+    let raw: [u8; 32] = der[der.len() - 32..]
+        .try_into()
+        .map_err(|_| internal("invalid Ed25519 public key length"))?;
+    VerifyingKey::from_bytes(&raw).map_err(|_| internal("invalid Ed25519 public key"))
+}
+
 pub fn verify(payload: &[u8], signature_b64: &str, key: &VerifyingKey) -> Result<(), ApiError> {
     let bytes = STANDARD.decode(signature_b64.trim())?;
     let array: [u8; 64] = bytes
