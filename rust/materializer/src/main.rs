@@ -729,13 +729,21 @@ fn patch_branding_storage(proj: &Path) -> Result<(), String> {
             if (!store.getBoolean(KEY_MIGRATED, false)) {
                 SharedPreferences legacyDedicated = context.getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE);
                 SharedPreferences legacyGeneral = PluginsConstants.getPreferences(context);
-                if (!migrate(legacyDedicated, store) || !migrate(legacyGeneral, store)
-                        || !store.edit().putBoolean(KEY_MIGRATED, true).commit()) {
+                if (!migrate(legacyDedicated, store)) {
                     SharedPreferences fallback = SignedGrantPreferences.wrap(
                             legacyDedicated, PluginGrantStore::isGrantKey);
                     preferences = fallback;
                     return fallback;
                 }
+                if (!migrate(legacyGeneral, store)) {
+                    SharedPreferences fallback = SignedGrantPreferences.wrap(
+                            legacyGeneral, PluginGrantStore::isGrantKey);
+                    preferences = fallback;
+                    return fallback;
+                }
+                // If this marker commit fails, the copied data is still usable;
+                // the idempotent migration will be retried on the next launch.
+                store.edit().putBoolean(KEY_MIGRATED, true).commit();
             }"#,
         "migrate legacy plugin grant preferences",
     )?;
