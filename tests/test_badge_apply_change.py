@@ -84,7 +84,7 @@ class ApplyChangeSecurityTests(unittest.TestCase):
         with open(os.path.join(self.data, "signatures", "badge_users.json.sig"), "rb") as f:
             signature = base64.b64decode(f.read().strip(), validate=True)
         self.assertEqual(len(signature), 64)
-        self.assertTrue(sign(self.private_key, payload) != signature)  # Ed25519 signatures are deterministic
+        self.assertEqual(sign(self.private_key, payload), signature)  # Ed25519 signatures are deterministic
 
     def test_unlisted_owner_is_rejected(self):
         before = open(os.path.join(self.data, "badge_users.json"), "rb").read()
