@@ -131,9 +131,9 @@ fn cmd_sign(opts: &HashMap<String, String>, files: &[String]) -> Res<i32> {
     fs::create_dir_all(out)?;
     for file in files {
         let source = fs::read(file)?;
-        let document: Value = serde_json::from_slice(&source)?;
-        let payload = canonical::canonical_bytes(&document)
-            .map_err(|error| format!("{file}: {error}"))?;
+        let _document: Value = serde_json::from_slice(&source)?;
+        // Sign the exact bytes that are published and verified by Android/server.
+        let payload = source;
         let signature = crypto::sign(&payload, &seed);
         let name = Path::new(file)
             .file_name()
@@ -172,6 +172,20 @@ fn cmd_verify(opts: &HashMap<String, String>, files: &[String]) -> Res<i32> {
     Ok(if valid { 0 } else { 1 })
 }
 
+fn read_verified_json(data: &Path, name: &str, public: &[u8; 32]) -> Res<Value> {
+    let payload = fs::read(data.join(name))?;
+    let signature_path = data.join("signatures").join(format!("{name}.sig"));
+    let signature_text = fs::read_to_string(signature_path)?;
+    let signature_bytes = STANDARD.decode(signature_text.trim())?;
+    let signature: [u8; 64] = signature_bytes
+        .try_into()
+        .map_err(|_| format!("{name}: detached signature must be 64 bytes"))?;
+    if !crypto::verify(&payload, public, &signature) {
+        return Err(format!("{name}: detached signature verification failed").into());
+    }
+    Ok(serde_json::from_slice(&payload)?)
+}
+
 fn cmd_apply_change(opts: &HashMap<String, String>) -> Res<i32> {
     let root = opts.get("root").ok_or("--root is required")?;
     let action = std::env::var("ACTION").unwrap_or_default();
@@ -197,8 +211,9 @@ fn cmd_apply_change(opts: &HashMap<String, String>) -> Res<i32> {
     let seed = pem::private_seed(&pem_text)?;
 
     let data = Path::new(root).join("data");
-    let owners_document: Value =
-        serde_json::from_slice(&fs::read(data.join("owner_users.json"))?)?;
+    let public_pem = fs::read_to_string(data.join("keys").join(PUBLIC_FILE))?;
+    let public = pem::public_bytes(&public_pem)?;
+    let owners_document = read_verified_json(&data, "owner_users.json", &public)?;
     let owners = owners_document
         .get("owners")
         .and_then(Value::as_array)
@@ -207,12 +222,12 @@ fn cmd_apply_change(opts: &HashMap<String, String>) -> Res<i32> {
         .iter()
         .filter_map(|value| value.as_str().map(str::to_string))
         .collect();
-    if !owner_id.is_empty() && !owner_list.iter().any(|owner| owner == &owner_id) {
-        return Err("OWNER_ID is not in owner_users.json".into());
+    if owner_id.is_empty() || !owner_list.iter().any(|owner| owner == &owner_id) {
+        return Err("OWNER_ID is not in the signed owner allowlist".into());
     }
 
     let path = data.join("badge_users.json");
-    let mut document: Value = serde_json::from_slice(&fs::read(&path)?)?;
+    let mut document = read_verified_json(&data, "badge_users.json", &public)?;
     let now = timefmt::now_rfc3339();
     {
         let top = document
