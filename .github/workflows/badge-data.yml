@@ -1,0 +1,40 @@
+name: badge data verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/**'
+      - 'backend/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/badge-data.yml'
+  pull_request:
+    paths:
+      - 'data/**'
+      - 'backend/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/badge-data.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.11"
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Verify published signatures
+        run: |
+          for f in data/badge_users.json data/owner_users.json; do
+            python3 scripts/verify_data.py "$f" "data/signatures/$(basename "$f").sig"
+          done
+      - name: Python syntax
+        run: python3 -m py_compile backend/server.py backend/bot_polling.py
