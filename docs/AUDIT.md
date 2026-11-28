@@ -4,6 +4,10 @@
 
 | Проблема | Где | Исправление |
 |---|---|---|
+| Отозванные бейджи оставались в `ApiBadgeSource` после обновления подписанного списка; статус developer не отличался от supporter | `GrapeBadgeBridge.sync()` | Сверка с предыдущим набором ID, удаление только ранее синхронизированных grapeGram-документов, применение только enabled/известных типов; `developer` получает `ProfileStatus.DEVELOPER`. Добавлены регрессионные проверки в `tests/test_badges.py` |
+
+| Проблема | Где | Исправление |
+|---|---|---|
 | POST-step `setup-gradle@v3` падал из-за `gradle-home-cache-cleanup` + Gradle 9.9.2 | старый `build.yml` | шаг убран в более ранних коммитах |
 | `NoSuchAlgorithmException` при открытии «Бейджи» | `GrapeBadges.verify()` | R8 вырезал EdDSA-классы BC; добавлены `-keep` правила в `proguard-rules.pro` через материализатор; проверка через провайдеры платформа → AndroidOpenSSL → BC → Conscrypt. В release DEX теперь 57 ссылок на `.../asymmetric/edec` (было 0) |
 | Подпись проверялась над каноническим JSON, а файлы подписаны как сырые байты | `GrapeBadges.fetch()` | проверка над сырыми байтами файла; `.sig` в репозитории валиден именно так |
