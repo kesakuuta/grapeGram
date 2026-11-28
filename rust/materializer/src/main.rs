@@ -129,8 +129,16 @@ fn verify_base_checkout(root: &Path, config: &Config) -> Result<(), String> {
         return Err("cannot verify base submodule state".to_string());
     }
     for line in String::from_utf8_lossy(&submodules.stdout).lines() {
-        if matches!(line.chars().next(), Some('+') | Some('-') | Some('U')) {
-            return Err(format!("base submodule is not at its pinned gitlink: {line}"));
+        match line.chars().next() {
+            Some(' ') => {}
+            // The upstream .gitmodules intentionally disables the huge TC39
+            // test262 checkout. Its SHA is still recorded in the parent gitlink.
+            Some('-') if line.split_whitespace().nth(1)
+                == Some("TMessagesProj/jni/twidget/widget-sandbox/packages/ios/Sources/CQuickJS/quickjs/test262") => {}
+            Some('+') | Some('-') | Some('U') => {
+                return Err(format!("base submodule is not at its pinned gitlink: {line}"));
+            }
+            _ => return Err(format!("unrecognised git submodule status: {line}")),
         }
     }
     Ok(())
