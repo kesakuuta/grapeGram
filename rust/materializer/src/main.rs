@@ -133,6 +133,14 @@ fn write_file(path: &Path, text: &str) -> Result<(), String> {
     fs::write(path, text).map_err(|e| format!("write {}: {}", path.display(), e))
 }
 
+fn escape_java_string_literal(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\r', "")
+        .replace('\n', "\\n")
+}
+
 fn copy_dir(src: &Path, dst: &Path) -> Result<(), String> {
     fs::create_dir_all(dst).map_err(|e| format!("create {}: {}", dst.display(), e))?;
     let entries =
@@ -569,9 +577,10 @@ fn run() -> Result<(), String> {
         Ok(v) => v,
         Err(_) => read_file(&pem_path)?.trim().to_string(),
     };
+    let pem_literal = escape_java_string_literal(&pem);
     let gconf = read_file(&gconf_path)?
         .replace("@DATA_BASE@", &data_base)
-        .replace("@PUBLIC_KEY_PEM@", &pem.replace('\n', "\n"));
+        .replace("@PUBLIC_KEY_PEM@", &pem_literal);
     write_file(&gconf_path, &gconf)?;
 
     let row_anchor = "        items.add(UItem.asCustomShadow(topView, 200 - 12));\n";
@@ -1566,6 +1575,17 @@ mod tests {
         assert_eq!(patch_once("a X b", "X", "Y", "t").unwrap(), "a Y b");
         assert!(patch_once("a X X b", "X", "Y", "t").is_err());
         assert!(patch_once("a b", "X", "Y", "t").is_err());
+    }
+
+    #[test]
+    fn java_string_literal_escapes_pem_newlines() {
+        let pem = "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyE=\n-----END PUBLIC KEY-----";
+        let escaped = escape_java_string_literal(pem);
+        assert_eq!(
+            escaped,
+            "-----BEGIN PUBLIC KEY-----\\nMCowBQYDK2VwAyE=\\n-----END PUBLIC KEY-----"
+        );
+        assert!(!escaped.contains('\n'));
     }
 
     #[test]
