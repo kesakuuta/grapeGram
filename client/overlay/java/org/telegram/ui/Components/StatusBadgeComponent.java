@@ -22,6 +22,22 @@ public class StatusBadgeComponent {
     private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable statusDrawable;
     private Drawable verifiedDrawable;
     private Drawable currentDrawable;
+    private final Drawable.Callback drawableCallback = new Drawable.Callback() {
+        @Override
+        public void invalidateDrawable(Drawable who) {
+            parentView.invalidate();
+        }
+
+        @Override
+        public void scheduleDrawable(Drawable who, Runnable what, long when) {
+            parentView.postAtTime(what, when);
+        }
+
+        @Override
+        public void unscheduleDrawable(Drawable who, Runnable what) {
+            parentView.removeCallbacks(what);
+        }
+    };
 
     public StatusBadgeComponent(View parentView) {
         this(parentView, 18);
@@ -100,7 +116,7 @@ public class StatusBadgeComponent {
     public void onAttachedToWindow() {
         statusDrawable.attach();
         if (currentDrawable instanceof GrapeBadgeDrawable) {
-            ((GrapeBadgeDrawable) currentDrawable).setCallback((Drawable.Callback) parentView);
+            ((GrapeBadgeDrawable) currentDrawable).setCallbackdrawableCallback;
         }
     }
 
