@@ -558,9 +558,16 @@ fn run() -> Result<(), String> {
     copy_dir(&client_dir.join("overlay/java"), &proj.join("src/main/java"))?;
     copy_dir(&client_dir.join("overlay/res"), &proj.join("src/main/res"))?;
 
-    // GrapeBadges uses BC's lightweight Ed25519 verifier directly. The pinned
-    // upstream base does not bundle bcprov, so materialize the dependency here.
+    // GrapeBadges uses BC's lightweight Ed25519 verifier. One upstream
+    // dependency already brings the legacy jdk15to18 artifact; exclude it to
+    // prevent duplicate classes when adding the maintained jdk18on artifact.
     let mut build_gradle = read_file(&build_path)?;
+    build_gradle = patch_once(
+        &build_gradle,
+        "configurations.configureEach {\n",
+        "configurations.configureEach {\n    exclude group: 'org.bouncycastle', module: 'bcprov-jdk15to18'\n",
+        "exclude legacy Bouncy Castle provider",
+    )?;
     build_gradle = patch_once(
         &build_gradle,
         "dependencies {\n",
@@ -1530,6 +1537,7 @@ fn run() -> Result<(), String> {
     expect_count(&icon_resolver, "GrapeCherryIcon", 18, "verify Cherrygram icon resolver aliases")?;
     let build_gradle = read_file(&build_path)?;
     expect_count(&build_gradle, "org.bouncycastle:bcprov-jdk18on:1.83", 1, "verify Ed25519 verifier dependency")?;
+    expect_count(&build_gradle, "exclude group: 'org.bouncycastle', module: 'bcprov-jdk15to18'", 1, "verify legacy Bouncy Castle exclusion")?;
     let props = read_file(&props_path)?;
     if get_gradle_property(&props, "APP_PACKAGE")? != PACKAGE {
         return Err("verify: APP_PACKAGE is not app.grapegram".to_string());
