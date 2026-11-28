@@ -3,6 +3,7 @@ use serde_json::Value;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 const MARK: &str = "GrapeIconOriginal";
 const PACKAGE: &str = "app.grapegram";
@@ -76,9 +77,63 @@ const EXTERA_ICONS: [(&str, &str, &str, &str); 31] = [
 
 #[derive(Deserialize)]
 struct Config {
+    #[serde(default)]
+    base_repo: String,
+    #[serde(default)]
+    base_commit: String,
     data_base: String,
     #[serde(default)]
     badge_service: String,
+}
+
+fn resolve_expected_base_commit(config_pin: &str, env_pin: Option<&str>) -> Result<String, String> {
+    let config_pin = config_pin.trim();
+    let env_pin = env_pin.unwrap_or("").trim();
+    if !config_pin.is_empty() && !env_pin.is_empty() && config_pin != env_pin {
+        return Err(format!("client/config.json base_commit ({config_pin}) does not match BASE_COMMIT ({env_pin})"));
+    }
+    let expected = if !env_pin.is_empty() { env_pin } else { config_pin };
+    if expected.len() != 40 || !expected.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("a pinned 40-character BASE_COMMIT is required".to_string());
+    }
+    Ok(expected.to_ascii_lowercase())
+}
+
+fn verify_base_checkout(root: &Path, config: &Config) -> Result<(), String> {
+    if !config.base_repo.is_empty() && config.base_repo != "exteraless/exteraless" {
+        return Err(format!("unexpected base_repo in client/config.json: {}", config.base_repo));
+    }
+    let expected = resolve_expected_base_commit(
+        &config.base_commit,
+        env::var("BASE_COMMIT").ok().as_deref(),
+    )?;
+    let head = Command::new("git")
+        .arg("-C").arg(root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .map_err(|e| format!("cannot inspect base checkout HEAD: {e}"))?;
+    if !head.status.success() {
+        return Err("base checkout is not a readable git repository".to_string());
+    }
+    let actual = String::from_utf8_lossy(&head.stdout).trim().to_ascii_lowercase();
+    if actual != expected {
+        return Err(format!("base checkout commit mismatch: expected {expected}, got {actual}"));
+    }
+
+    let submodules = Command::new("git")
+        .arg("-C").arg(root)
+        .args(["submodule", "status", "--recursive"])
+        .output()
+        .map_err(|e| format!("cannot inspect base submodules: {e}"))?;
+    if !submodules.status.success() {
+        return Err("cannot verify base submodule state".to_string());
+    }
+    for line in String::from_utf8_lossy(&submodules.stdout).lines() {
+        if matches!(line.chars().next(), Some('+') | Some('-') | Some('U')) {
+            return Err(format!("base submodule is not at its pinned gitlink: {line}"));
+        }
+    }
+    Ok(())
 }
 
 struct Args {
@@ -569,6 +624,7 @@ fn run() -> Result<(), String> {
         .unwrap_or_else(|| repo_root.join("client").join("config.json"));
     let cfg: Config = serde_json::from_str(&read_file(&config_path)?)
         .map_err(|e| format!("parse {}: {}", config_path.display(), e))?;
+    verify_base_checkout(&args.root, &cfg)?;
     let data_base = env::var("GRP_DATA_BASE")
         .ok()
         .filter(|v| !v.is_empty())
@@ -1399,6 +1455,15 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pinned_base_commit_requires_exact_sha_and_detects_env_mismatch() {
+        let pin = "31a35e4683fb420ee782cdd32f36aea812bf756c";
+        assert_eq!(resolve_expected_base_commit(pin, None).unwrap(), pin);
+        assert!(resolve_expected_base_commit(pin, Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")).is_err());
+        assert!(resolve_expected_base_commit("", None).is_err());
+        assert!(resolve_expected_base_commit("main", None).is_err());
+    }
 
     #[test]
     fn removes_only_duplicate_launcher_pngs_shadowed_by_webp() {
