@@ -1086,7 +1086,7 @@ mod tests {
 
     #[test]
     fn bouncycastle_dependency_is_substituted_and_added_once() {
-        let input = "plugins {}\\ndependencies {\\n}\\n";
+        let input = "plugins {}\ndependencies {\n}\n";
         let output = patch_bouncycastle_dependencies(input).unwrap();
         assert_eq!(output.matches("implementation 'org.bouncycastle:bcprov-jdk18on:1.83'").count(), 1);
         assert_eq!(output.matches("substitute(module('org.bouncycastle:bcprov-jdk15to18'))").count(), 1);
