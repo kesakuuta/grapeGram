@@ -574,12 +574,6 @@ fn run() -> Result<(), String> {
         "dependencies {\n    implementation 'org.bouncycastle:bcprov-jdk18on:1.83'\n",
         "Ed25519 verifier dependency",
     )?;
-    build_gradle = patch_once(
-        &build_gradle,
-        "configurations.configureEach {\n",
-        "configurations.configureEach {\n    // Keep the modern JDK 1.8+ BC provider; legacy artifact ships identical classes.\n    exclude group: 'org.bouncycastle', module: 'bcprov-jdk15to18'\n",
-        "exclude legacy Bouncy Castle provider",
-    )?;
     write_file(&build_path, &build_gradle)?;
 
     let pem_path = client_dir
