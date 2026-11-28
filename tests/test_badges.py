@@ -293,5 +293,31 @@ class IconTests(unittest.TestCase):
             self.assertEqual(px[((256 * w) + 256) * 4 + 3], 255)
 
 
+class BadgeBridgeRegressionTests(unittest.TestCase):
+    def test_sync_removes_previously_synced_revoked_badges(self):
+        path = os.path.join(ROOT, "client", "overlay", "java", "app",
+                            "grapegram", "GrapeBadgeBridge.java")
+        with open(path, encoding="utf-8") as source_file:
+            source = source_file.read()
+        self.assertIn('getStringSet(KEY_SYNCED_IDS', source)
+        self.assertIn('getApiBadgeSource().put(id, null)', source)
+        self.assertIn('prefs.edit().putStringSet(KEY_SYNCED_IDS, nextIds).apply()', source)
+
+    def test_sync_does_not_apply_disabled_or_unknown_badges(self):
+        path = os.path.join(ROOT, "client", "overlay", "java", "app",
+                            "grapegram", "GrapeBadgeBridge.java")
+        with open(path, encoding="utf-8") as source_file:
+            source = source_file.read()
+        self.assertIn('if (!entry.enabled || !isKnownBadge(entry.badge))', source)
+        self.assertIn('"contributor".equals(badge)', source)
+
+    def test_developer_badge_uses_developer_status(self):
+        path = os.path.join(ROOT, "client", "overlay", "java", "app",
+                            "grapegram", "GrapeBadgeBridge.java")
+        with open(path, encoding="utf-8") as source_file:
+            source = source_file.read()
+        self.assertIn('ProfileStatus.DEVELOPER : ProfileStatus.SUPPORTER', source)
+
+
 if __name__ == "__main__":
     unittest.main()
