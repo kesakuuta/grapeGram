@@ -584,6 +584,71 @@ fn run() -> Result<(), String> {
     )?;
     write_file(&user_cell_path, &user_cell)?;
 
+    // Surface the same signed badge in the one-to-one/group chat action-bar title.
+    let chat_header_path = proj.join("src/main/java/org/telegram/ui/Components/ChatAvatarContainer.java");
+    let mut chat_header = read_file(&chat_header_path)?;
+    chat_header = patch_once(
+        &chat_header,
+        "import com.radolyn.ayugram.utils.LastSeenHelper;\\n",
+        "import com.radolyn.ayugram.utils.LastSeenHelper;\\nimport com.exteragram.messenger.api.dto.BadgeDTO;\\nimport com.exteragram.messenger.badges.BadgesController;\\n",
+        "chat header badge imports",
+    )?;
+    chat_header = patch_once(
+        &chat_header,
+        "    private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable botVerificationDrawable;\\n",
+        "    private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable botVerificationDrawable;\\n    private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable grapeBadgeDrawable;\\n",
+        "chat header badge field",
+    )?;
+    chat_header = patch_once(
+        &chat_header,
+        "        botVerificationDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(titleTextView, dp(17));\\n",
+        "        botVerificationDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(titleTextView, dp(17));\\n        grapeBadgeDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(titleTextView, dp(24));\\n",
+        "chat header badge init",
+    )?;
+    chat_header = patch_once(
+        &chat_header,
+        "        titleTextView.setText(value);\\n        titleTextView.setScrollNonFitText(scrollable || isCentered());\\n",
+        "        titleTextView.setText(value);\\n        titleTextView.setScrollNonFitText(scrollable || isCentered());\\n        TLRPC.User grapeBadgeUser = parentFragment == null ? null : parentFragment.getCurrentUser();\\n        BadgeDTO grapeBadgeInfo = grapeBadgeUser == null ? null : BadgesController.INSTANCE.getBadge(grapeBadgeUser);\\n",
+        "chat header badge lookup",
+    )?;
+    chat_header = patch_once(
+        &chat_header,
+        "        if (premium || DialogObject.getEmojiStatusDocumentId(emojiStatus) != 0) {\\n",
+        "        if (grapeBadgeInfo != null) {\\n            grapeBadgeDrawable.set(grapeBadgeInfo.getDocumentId(), animated);\\n            grapeBadgeDrawable.setColor(getThemedColor(Theme.key_profile_verifiedBackground));\\n            grapeBadgeDrawable.setParticles(true, animated);\\n            titleTextView.setRightDrawable(grapeBadgeDrawable);\\n            rightDrawableIsScamOrVerified = false;\\n            rightDrawableContentDescription = \"grapeGram\";\\n            if (isCentered()) {\\n                titleTextView.setRightDrawable2(null);\\n            }\\n        } else if (premium || DialogObject.getEmojiStatusDocumentId(emojiStatus) != 0) {\\n",
+        "chat header badge display",
+    )?;
+    chat_header = patch_once(
+        &chat_header,
+        "            NotificationCenter.getGlobalInstance().addWeakObserver(this, NotificationCenter.emojiLoaded);\\n",
+        "            NotificationCenter.getGlobalInstance().addWeakObserver(this, NotificationCenter.emojiLoaded);\\n            NotificationCenter.getInstance(currentAccount).addWeakObserver(this, NotificationCenter.updateInterfaces);\\n",
+        "chat header badge observer",
+    )?;
+    chat_header = patch_once(
+        &chat_header,
+        "            NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.emojiLoaded);\\n",
+        "            NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.emojiLoaded);\\n            NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.updateInterfaces);\\n",
+        "chat header badge observer removal",
+    )?;
+    chat_header = patch_once(
+        &chat_header,
+        "        if (botVerificationDrawable != null) {\\n            botVerificationDrawable.attach();\\n        }\\n",
+        "        if (botVerificationDrawable != null) {\\n            botVerificationDrawable.attach();\\n        }\\n        grapeBadgeDrawable.attach();\\n",
+        "chat header badge attach",
+    )?;
+    chat_header = patch_once(
+        &chat_header,
+        "        if (botVerificationDrawable != null) {\\n            botVerificationDrawable.detach();\\n        }\\n",
+        "        if (botVerificationDrawable != null) {\\n            botVerificationDrawable.detach();\\n        }\\n        grapeBadgeDrawable.detach();\\n",
+        "chat header badge detach",
+    )?;
+    chat_header = patch_once(
+        &chat_header,
+        "        } else if (id == NotificationCenter.savedMessagesDialogsUpdate) {\\n            updateSubtitle(true);\\n        }\\n",
+        "        } else if (id == NotificationCenter.updateInterfaces && account == currentAccount && parentFragment != null) {\\n            int mask = args != null && args.length > 0 && args[0] instanceof Integer\\n                    ? (Integer) args[0] : 0;\\n            if ((mask & MessagesController.UPDATE_MASK_EMOJI_STATUS) != 0) {\\n                TLRPC.User user = parentFragment.getCurrentUser();\\n                if (user != null) {\\n                    setTitle(titleTextView.getText(), user.scam, user.fake, user.verified,\\n                            MessagesController.getInstance(currentAccount).isPremiumUser(user)\\n                                    && !MessagesController.getInstance(currentAccount).premiumFeaturesBlocked(),\\n                            user.emoji_status, false);\\n                }\\n            }\\n        } else if (id == NotificationCenter.savedMessagesDialogsUpdate) {\\n            updateSubtitle(true);\\n        }\\n",
+        "chat header badge refresh",
+    )?;
+    write_file(&chat_header_path, &chat_header)?;
+
     let nox = "NOX(\"NoxIcon\", R.mipmap.icon_2_background_sa, R.mipmap.icon_foreground_sa, R.string.AppIconNox);";
     let enum_replacement = format!(
         "{},\n{};",
