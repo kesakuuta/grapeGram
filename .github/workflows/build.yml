@@ -220,31 +220,86 @@ jobs:
         if: always()
         run: |
           python3 - <<'PY'
-          import os, re
+          import json, os, re
           log = os.path.join(os.environ['RUNNER_TEMP'], 'gradle.log')
-          if not os.path.exists(log):
-              raise SystemExit(0)
-          text = open(log, 'r', errors='replace').read()
-          groups = {
-              'Groovy DSL deprecations': r"was deprecated.*|deprecated.*Groovy",
-              'Java source/target': r"source value 8|target value 8|source/target",
-              'Kotlin warnings': r"^w: ",
-              'CMake warnings': r"CMake Warning|CMake Deprecation",
-              'C/C++ warnings': r"warning: ",
-              'R8 warnings': r"^Warning:.*R8|R8:",
-          }
+          source = open(log, 'r', errors='replace').read() if os.path.exists(log) else ''
+          records = []
+          patterns = [
+              ('Kotlin', re.compile(r'^w: (?P<file>.*?):(?P<line>\d+):(?P<column>\d+): (?P<message>.*)$')),
+              ('C/C++', re.compile(r'^(?P<file>.*?):(?P<line>\d+):(?P<column>\d+): warning: (?P<message>.*)$')),
+              ('Java', re.compile(r'^(?P<file>.*?\.java): warning: (?P<message>.*)$')),
+              ('CMake', re.compile(r'^CMake (?:Deprecation )?Warning at (?P<file>.*?):(?P<line>\d+).*?: (?P<message>.*)$')),
+              ('R8', re.compile(r'^(?:R8: )?Warning: (?P<message>.*)$')),
+              ('Gradle', re.compile(r'^(?P<message>.*(?:was deprecated|has been deprecated|deprecated Gradle features).*)$')),
+          ]
+          for raw in source.splitlines():
+              line = raw.strip()
+              for category, pattern in patterns:
+                  match = pattern.match(line)
+                  if not match:
+                      continue
+                  item = match.groupdict()
+                  file = item.get('file')
+                  if file:
+                      file = file.replace(os.environ.get('GITHUB_WORKSPACE', ''), '').lstrip('/')
+                  if file and ('/app/grapegram/' in '/' + file or file.startswith('app/grapegram/')):
+                      origin, status = 'grapeGram', 'needs-fix-or-review'
+                  elif file and any(name in file for name in (
+                      'org/telegram/ui/Cells/DialogCell.java',
+                      'org/telegram/ui/Components/ChatAvatarContainer.java',
+                      'org/telegram/ui/ProfileActivity.java',
+                      'org/telegram/ui/Cells/UserCell.java',
+                      'org/telegram/ui/ThemeActivity.java',
+                      'app/exteraless/settings/OpenExteraChatsActivity.java',
+                      'app/exteraless/ai/AiConfig.java',
+                      'tw/nekomimi/nekogram/translate/source/GoogleTranslator.kt',
+                      'app/exteraless/plugins/ui/PluginsActivity.java')):
+                      origin, status = 'upstream file patched by grapeGram', 'review-patched-upstream'
+                  elif file and ('/jni/third_party/' in '/' + file or '/jni/voip/' in '/' + file or '/jni/tgcalls/' in '/' + file):
+                      origin, status = 'third-party/upstream dependency', 'review-only-no-bulk-edit'
+                  elif category in ('CMake', 'Gradle', 'R8'):
+                      origin, status = 'build tooling', 'review-tooling'
+                  else:
+                      origin, status = 'upstream', 'review-upstream'
+                  records.append({
+                      'category': category, 'file': file,
+                      'line': int(item['line']) if item.get('line') else None,
+                      'column': int(item['column']) if item.get('column') else None,
+                      'message': item.get('message', line),
+                      'origin': origin, 'status': status, 'raw': line
+                  })
+                  break
+          unique = {}
+          for item in records:
+              key = (item['category'], item['file'], item['line'], item['message'])
+              unique[key] = item
+          report = {'total_warning_lines': len(records), 'unique_warnings': len(unique),
+                    'warnings': list(unique.values())}
+          out_dir = os.path.join(os.environ['RUNNER_TEMP'], 'warning-report')
+          os.makedirs(out_dir, exist_ok=True)
+          with open(os.path.join(out_dir, 'warning-report.json'), 'w') as f:
+              json.dump(report, f, ensure_ascii=False, indent=2)
+          md = [
+              '## Gradle warning report', '',
+              f"- Warning lines: **{len(records)}**",
+              f"- Unique warnings: **{len(unique)}**", '',
+              '| Category | Origin | File | Line | Status | Warning |',
+              '|---|---|---|---:|---|---|'
+          ]
+          for item in unique.values():
+              message = item['message'].replace('|', '\\|')
+              md.append('| {category} | {origin} | {file} | {line} | {status} | {message} |'.format(
+                  category=item['category'], origin=item['origin'],
+                  file=item['file'] or '—', line=item['line'] or '—',
+                  status=item['status'], message=message))
+          markdown = '\n'.join(md) + '\n'
+          with open(os.path.join(out_dir, 'warning-report.md'), 'w') as f:
+              f.write(markdown)
           summary = os.environ.get('GITHUB_STEP_SUMMARY')
-          lines = ['## Gradle warning report', '']
-          for name, pat in groups.items():
-              n = len(re.findall(pat, text, re.MULTILINE))
-              lines.append(f'- **{name}**: {n}')
-          lines.append('')
-          lines.append('Full log uploaded as artifact `gradle-log`.')
-          out = '\n'.join(lines) + '\n'
-          print(out)
           if summary:
-              with open(summary, 'a') as fh:
-                  fh.write(out)
+              with open(summary, 'a') as f:
+                  f.write(markdown)
+          print(markdown)
           PY
       - name: Upload gradle log
         if: always()
@@ -253,32 +308,47 @@ jobs:
           name: gradle-log
           path: ${{ runner.temp }}/gradle.log
           if-no-files-found: warn
-      - name: Name artifacts grapeGram
+      - name: Name and verify signed artifacts
         run: |
           python3 - <<'PY'
-          import glob, os, shutil
+          import glob, hashlib, os, shutil, subprocess, zipfile
           temp = os.environ['RUNNER_TEMP']
+          base = os.path.join(temp, 'base/TMessagesProj/build/outputs')
+          apks = glob.glob(os.path.join(base, 'apk/release/*.apk'))
+          aabs = glob.glob(os.path.join(base, 'bundle/release/*.aab'))
+          if len(apks) != 1:
+              raise SystemExit(f'expected exactly one release APK, found {len(apks)}')
+          if len(aabs) != 1:
+              raise SystemExit(f'expected exactly one release AAB, found {len(aabs)}')
           out = os.path.join(temp, 'artifacts')
           os.makedirs(out, exist_ok=True)
-          patterns = [
-              os.path.join(temp, 'base/TMessagesProj/build/outputs/apk/release/*.apk'),
-              os.path.join(temp, 'base/TMessagesProj/build/outputs/bundle/release/*.aab'),
-          ]
-          count = 0
-          for pattern in patterns:
-              for path in glob.glob(pattern, recursive=True):
-                  base = os.path.basename(path)
-                  if base.endswith('.aab'):
-                      base = 'grapeGram-release.aab'
-                  elif not base.startswith('grapeGram'):
-                      base = 'grapeGram-' + base
-                  dst = os.path.join(out, base)
-                  shutil.copy2(path, dst)
-                  print('artifact:', os.path.basename(dst))
-                  count += 1
-          if count < 2:
-              raise SystemExit('expected release APK and AAB, got %d' % count)
+          apk = os.path.join(out, 'grapeGram-release.apk')
+          aab = os.path.join(out, 'grapeGram-release.aab')
+          shutil.copy2(apks[0], apk)
+          shutil.copy2(aabs[0], aab)
+          if os.path.getsize(apk) < 1024 * 1024 or os.path.getsize(aab) < 1024 * 1024:
+              raise SystemExit('release artifact is unexpectedly small')
+          sdk = os.environ.get('ANDROID_HOME') or os.environ.get('ANDROID_SDK_ROOT')
+          apksigner = os.path.join(sdk, 'build-tools', '36.0.0', 'apksigner')
+          subprocess.run([apksigner, 'verify', '--verbose', '--print-certs', apk], check=True)
+          subprocess.run(['jarsigner', '-verify', '-verbose', '-certs', aab], check=True)
+          with zipfile.ZipFile(aab) as archive:
+              names = archive.namelist()
+              if not any(n.startswith('META-INF/') and n.endswith('.RSA') for n in names):
+                  raise SystemExit('AAB has no JAR signature block')
+              if not any(n.startswith('META-INF/') and n.endswith('.SF') for n in names):
+                  raise SystemExit('AAB has no JAR signature manifest')
+          for path in (apk, aab):
+              digest = hashlib.sha256(open(path, 'rb').read()).hexdigest()
+              print(f'{os.path.basename(path)} sha256:{digest} size:{os.path.getsize(path)}')
           PY
+      - name: Upload warning report
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: warning-report
+          path: \${{ runner.temp }}/warning-report/*
+          if-no-files-found: warn
       - name: Upload artifacts
         uses: actions/upload-artifact@v7.0.2
         with:
