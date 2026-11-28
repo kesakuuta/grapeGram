@@ -5,12 +5,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use base64::Engine as _;
 use serde_json::{json, Value};
 
 use crate::canonical::{json_line, pretty_bytes};
-use crate::crypto::{sign, signing_key_from_env};
+use crate::crypto::{sign, signing_key_from_env, verify, verifying_key_from_pem};
 use crate::error::{bad_request, forbidden, internal, ApiError};
 
 const ALLOWED_BADGES: [&str; 4] = ["grapegram", "founder", "developer", "contributor"];
@@ -164,16 +164,31 @@ impl Store {
     }
 
     pub fn owners(&self) -> Result<Vec<String>, ApiError> {
-        let path = self.data_dir.join("owner_users.json");
-        let doc: Value = serde_json::from_slice(&fs::read(path)?)?;
+        let payload = fs::read(self.data_dir.join("owner_users.json"))?;
+        let signature = fs::read_to_string(
+            self.data_dir.join("signatures/owner_users.json.sig"),
+        )?;
+        let public_key = fs::read_to_string(
+            self.data_dir.join("keys/grapegram_ed25519.pub.pem"),
+        )?;
+        let key = verifying_key_from_pem(&public_key)?;
+        verify(&payload, &signature, &key)
+            .map_err(|_| internal("owner allowlist signature is invalid"))?;
+        let doc: Value = serde_json::from_slice(&payload)?;
         let owners = doc
             .get("owners")
             .and_then(Value::as_array)
             .ok_or_else(|| internal("owner_users.json has no owners array"))?;
-        Ok(owners
-            .iter()
-            .filter_map(|value| value.as_str().map(str::to_string))
-            .collect())
+        let mut result = Vec::with_capacity(owners.len());
+        for value in owners {
+            let id = value.as_str()
+                .ok_or_else(|| internal("owner ID must be a string"))?;
+            if !id_is_valid(id) {
+                return Err(internal("owner allowlist contains an invalid Telegram ID"));
+            }
+            result.push(id.to_string());
+        }
+        Ok(result)
     }
 
     pub fn new_challenge(&self) -> Result<String, ApiError> {
@@ -382,17 +397,29 @@ mod tests {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn test_store(name: &str) -> (Store, PathBuf) {
+        use ed25519_dalek::SigningKey;
         let suffix = COUNTER.fetch_add(1, Ordering::Relaxed);
         let directory = env::temp_dir().join(format!(
             "grape-badge-test-{}-{suffix}-{name}",
             process::id()
         ));
-        fs::create_dir_all(&directory).unwrap();
+        fs::create_dir_all(directory.join("signatures")).unwrap();
+        fs::create_dir_all(directory.join("keys")).unwrap();
+        let owner_payload = br#"{"version":1,"owners":["7293365262","960792706"]}"#;
+        let owner_key = SigningKey::from_bytes(&[0x37u8; 32]);
+        let signature = crate::crypto::sign(owner_payload, &owner_key);
+        fs::write(directory.join("owner_users.json"), owner_payload).unwrap();
         fs::write(
-            directory.join("owner_users.json"),
-            r#"{"version":1,"owners":["7293365262","960792706"]}"#,
-        )
-        .unwrap();
+            directory.join("signatures/owner_users.json.sig"),
+            format!("{signature}\n"),
+        ).unwrap();
+        let mut public_der = vec![0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00];
+        public_der.extend_from_slice(owner_key.verifying_key().as_bytes());
+        let public_pem = format!(
+            "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----\n",
+            STANDARD.encode(public_der)
+        );
+        fs::write(directory.join("keys/grapegram_ed25519.pub.pem"), public_pem).unwrap();
         fs::write(
             directory.join("badge_users.json"),
             r#"{"version":1,"updated_at":"2026-01-01T00:00:00Z","badges":{}}"#,
@@ -403,6 +430,16 @@ mod tests {
 
     fn cleanup(directory: &Path) {
         let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn owner_allowlist_signature_is_required() {
+        let (store, directory) = test_store("owner-signature");
+        assert_eq!(store.owners().unwrap(), vec!["7293365262", "960792706"]);
+        fs::write(directory.join("owner_users.json"),
+            r#"{"version":1,"owners":["111111111"]}"#).unwrap();
+        assert!(store.owners().is_err());
+        cleanup(&directory);
     }
 
     #[test]
