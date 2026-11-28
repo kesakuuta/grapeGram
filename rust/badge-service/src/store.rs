@@ -163,17 +163,21 @@ impl Store {
             .map_err(|_| internal("store lock is poisoned"))
     }
 
-    pub fn owners(&self) -> Result<Vec<String>, ApiError> {
-        let payload = fs::read(self.data_dir.join("owner_users.json"))?;
-        let signature = fs::read_to_string(
-            self.data_dir.join("signatures/owner_users.json.sig"),
-        )?;
+    fn read_verified_data(&self, name: &str) -> Result<Vec<u8>, ApiError> {
+        let payload = fs::read(self.data_dir.join(name))?;
+        let signature_name = format!("{name}.sig");
+        let signature = fs::read_to_string(self.data_dir.join("signatures").join(signature_name))?;
         let public_key = fs::read_to_string(
             self.data_dir.join("keys/grapegram_ed25519.pub.pem"),
         )?;
         let key = verifying_key_from_pem(&public_key)?;
         verify(&payload, &signature, &key)
-            .map_err(|_| internal("owner allowlist signature is invalid"))?;
+            .map_err(|_| internal("signed data file signature is invalid"))?;
+        Ok(payload)
+    }
+
+    pub fn owners(&self) -> Result<Vec<String>, ApiError> {
+        let payload = self.read_verified_data("owner_users.json")?;
         let doc: Value = serde_json::from_slice(&payload)?;
         let owners = doc
             .get("owners")
@@ -294,7 +298,8 @@ impl Store {
         }
 
         let path = self.data_dir.join("badge_users.json");
-        let mut doc: Value = serde_json::from_slice(&fs::read(&path)?)?;
+        let signed_payload = self.read_verified_data("badge_users.json")?;
+        let mut doc: Value = serde_json::from_slice(&signed_payload)?;
         let now = timestamp();
         let version = doc.get("version").and_then(Value::as_u64).unwrap_or(1) + 1;
 
@@ -420,16 +425,28 @@ mod tests {
             STANDARD.encode(public_der)
         );
         fs::write(directory.join("keys/grapegram_ed25519.pub.pem"), public_pem).unwrap();
+        let badge_payload = br#"{"version":1,"updated_at":"2026-01-01T00:00:00Z","badges":{}}"#;
+        let badge_signature = crate::crypto::sign(badge_payload, &owner_key);
+        fs::write(directory.join("badge_users.json"), badge_payload).unwrap();
         fs::write(
-            directory.join("badge_users.json"),
-            r#"{"version":1,"updated_at":"2026-01-01T00:00:00Z","badges":{}}"#,
-        )
-        .unwrap();
+            directory.join("signatures/badge_users.json.sig"),
+            format!("{badge_signature}\n"),
+        ).unwrap();
         (Store::new(directory.clone()), directory)
     }
 
     fn cleanup(directory: &Path) {
         let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn badge_document_signature_is_required_before_mutation() {
+        let (store, directory) = test_store("badge-signature");
+        let path = directory.join("badge_users.json");
+        fs::write(&path, r#"{"version":1,"updated_at":"2026-01-01T00:00:00Z","badges":{"111111111":{"badge":"founder","enabled":true,"record_version":1}}}"#).unwrap();
+        let result = store.mutate("missing-session", "555555555", "grapegram", true, "", None);
+        assert!(result.is_err());
+        cleanup(&directory);
     }
 
     #[test]
