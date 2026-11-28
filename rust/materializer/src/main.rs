@@ -574,6 +574,12 @@ fn run() -> Result<(), String> {
         "dependencies {\n    implementation 'org.bouncycastle:bcprov-jdk18on:1.83'\n",
         "Ed25519 verifier dependency",
     )?;
+    build_gradle = patch_once(
+        &build_gradle,
+        "configurations.configureEach {\n",
+        "configurations.configureEach {\n    // Keep the modern JDK 1.8+ BC provider; legacy artifact ships identical classes.\n    exclude group: 'org.bouncycastle', module: 'bcprov-jdk15to18'\n",
+        "exclude legacy Bouncy Castle provider",
+    )?;
     write_file(&build_path, &build_gradle)?;
 
     let pem_path = client_dir
@@ -1531,6 +1537,7 @@ fn run() -> Result<(), String> {
     expect_count(&icon_resolver, "GrapeCherryIcon", 18, "verify Cherrygram icon resolver aliases")?;
     let build_gradle = read_file(&build_path)?;
     expect_count(&build_gradle, "org.bouncycastle:bcprov-jdk18on:1.83", 1, "verify Ed25519 verifier dependency")?;
+    expect_count(&build_gradle, "module: 'bcprov-jdk15to18'", 1, "verify legacy Bouncy Castle exclusion")?;
     expect_count(&build_gradle, "exclude group: 'org.bouncycastle', module: 'bcprov-jdk15to18'", 1, "verify legacy Bouncy Castle exclusion")?;
     let props = read_file(&props_path)?;
     if get_gradle_property(&props, "APP_PACKAGE")? != PACKAGE {
