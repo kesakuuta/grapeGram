@@ -412,6 +412,14 @@ class SettingsRegressionTests(unittest.TestCase):
         self.assertIn("return R.drawable.grape_icon_original;", source)
         self.assertNotIn("let old_notification_icon = r#", source)
 
+    def test_materializer_excludes_duplicate_legacy_bouncycastle_provider(self):
+        path = os.path.join(ROOT, "rust", "materializer", "src", "main.rs")
+        with open(path, encoding="utf-8") as source_file:
+            source = source_file.read()
+        self.assertIn("org.bouncycastle:bcprov-jdk18on:1.83", source)
+        self.assertIn("module: 'bcprov-jdk15to18'", source)
+        self.assertIn('"exclude legacy Bouncy Castle provider"', source)
+
     def test_android_signature_verifier_has_raw_and_canonical_compatibility(self):
         path = os.path.join(ROOT, "client", "overlay", "java", "app",
                             "grapegram", "GrapeBadges.java")
