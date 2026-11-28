@@ -341,7 +341,7 @@ jobs:
           subprocess.run(['jarsigner', '-verify', '-verbose', '-certs', aab], check=True)
           with zipfile.ZipFile(aab) as archive:
               names = archive.namelist()
-              if not any(n.startswith('META-INF/') and n.endswith('.RSA') for n in names):
+              if not any(n.startswith('META-INF/') and n.rsplit('.', 1)[-1] in ('RSA', 'DSA', 'EC') for n in names):
                   raise SystemExit('AAB has no JAR signature block')
               if not any(n.startswith('META-INF/') and n.endswith('.SF') for n in names):
                   raise SystemExit('AAB has no JAR signature manifest')
