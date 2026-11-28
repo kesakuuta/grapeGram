@@ -96,6 +96,24 @@ ssh -L 8080:127.0.0.1:8080 USER@VPS_IP
 
 Затем на локальном компьютере обращаться к `http://127.0.0.1:8080`. Не публикуйте порт 8080 напрямую в интернет.
 
+## Выдача через SSH CLI (пока нет Android-панели)
+
+После запуска сервисов подключиться по SSH и создать код:
+
+```bash
+cd /opt/grapegram
+sudo -u grapegram python3 backend/admin_cli.py challenge
+```
+
+Отправить полученную команду `/bind КОД` боту в личном чате. Бот пришлёт Bearer token. Затем выдать или отозвать бейдж:
+
+```bash
+sudo -u grapegram python3 backend/admin_cli.py grant 123456789 --badge founder --reason "founding contributor"
+sudo -u grapegram python3 backend/admin_cli.py revoke 123456789 --badge founder --reason "revoked by owner"
+```
+
+CLI запросит токен скрытым вводом; он не попадёт в историю shell. Утилита обращается только к локальному API.
+
 ## Авторизация владельца и выдача
 
 1. Клиент/админ-интерфейс запрашивает `POST /challenge` с JSON body `{}`.
