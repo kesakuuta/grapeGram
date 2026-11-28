@@ -1530,7 +1530,7 @@ fn run() -> Result<(), String> {
     expect_count(&icon_resolver, "getSelectedIcon", 1, "verify dynamic grapeGram icon resolver")?;
     expect_count(&icon_resolver, "GrapeCherryIcon", 18, "verify Cherrygram icon resolver aliases")?;
     let build_gradle = read_file(&build_path)?;
-    expect_count(&build_gradle, "org.bouncycastle:bcprov-jdk18on:1.83", 1, "verify Ed25519 verifier dependency")?;
+    expect_count(&build_gradle, "implementation 'org.bouncycastle:bcprov-jdk18on:1.83'", 1, "verify Ed25519 verifier dependency")?;
     expect_count(&build_gradle, "module: 'bcprov-jdk15to18'", 1, "verify legacy Bouncy Castle exclusion")?;
     expect_count(&build_gradle, "substitute(module('org.bouncycastle:bcprov-jdk15to18')).using(module('org.bouncycastle:bcprov-jdk18on:1.83'))", 1, "verify legacy Bouncy Castle module substitution")?;
     expect_count(&build_gradle, "exclude group: 'org.bouncycastle', module: 'bcprov-jdk15to18'", 1, "verify legacy Bouncy Castle exclusion")?;
