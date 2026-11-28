@@ -171,6 +171,54 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Overlay launcher artwork is WebP while some upstream mipmap folders still
+/// contain PNGs with the same Android resource name. Android's resource merger
+/// treats those as duplicate resources even though the file extensions differ.
+/// Prefer the overlay WebP for launcher resources and remove only the colliding
+/// upstream PNGs (never touch unrelated drawable/mipmap assets).
+fn remove_duplicate_launcher_pngs(res_root: &Path) -> Result<usize, String> {
+    let mut removed = 0usize;
+    let entries = fs::read_dir(res_root)
+        .map_err(|e| format!("read resource root {}: {}", res_root.display(), e))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("read resource root entry: {}", e))?;
+        let folder = entry.file_name().to_string_lossy().into_owned();
+        if !folder.starts_with("mipmap-") || !entry.file_type().map_err(|e| e.to_string())?.is_dir() {
+            continue;
+        }
+        let dir = entry.path();
+        let files = fs::read_dir(&dir)
+            .map_err(|e| format!("read mipmap dir {}: {}", dir.display(), e))?;
+        let mut webp_stems = std::collections::HashSet::new();
+        let mut png_paths = Vec::new();
+        for file in files {
+            let file = file.map_err(|e| format!("read mipmap file: {}", e))?;
+            if !file.file_type().map_err(|e| e.to_string())?.is_file() {
+                continue;
+            }
+            let path = file.path();
+            let stem = path.file_stem().and_then(|v| v.to_str()).unwrap_or("");
+            match path.extension().and_then(|v| v.to_str()) {
+                Some("webp") if stem.starts_with("ic_launcher") => {
+                    webp_stems.insert(stem.to_string());
+                }
+                Some("png") if stem.starts_with("ic_launcher") => {
+                    png_paths.push((stem.to_string(), path));
+                }
+                _ => {}
+            }
+        }
+        for (stem, png) in png_paths {
+            if webp_stems.contains(&stem) {
+                fs::remove_file(&png)
+                    .map_err(|e| format!("remove duplicate launcher PNG {}: {}", png.display(), e))?;
+                removed += 1;
+            }
+        }
+    }
+    Ok(removed)
+}
+
 fn patch_once(text: &str, anchor: &str, replacement: &str, what: &str) -> Result<String, String> {
     let n = text.matches(anchor).count();
     if n != 1 {
@@ -572,6 +620,8 @@ fn run() -> Result<(), String> {
 
     copy_dir(&client_dir.join("overlay/java"), &proj.join("src/main/java"))?;
     copy_dir(&client_dir.join("overlay/res"), &proj.join("src/main/res"))?;
+    let removed_launcher_pngs = remove_duplicate_launcher_pngs(&proj.join("src/main/res"))?;
+    println!("removed {} upstream PNGs shadowed by overlay launcher WebP assets", removed_launcher_pngs);
 
     let pem_path = client_dir
         .parent()
