@@ -173,7 +173,7 @@ public class GrapeSettingsActivity extends BaseFragment {
                     toast("Бейджи: " + result.error);
                     return;
                 }
-                GrapeBadgeBridge.syncAsync(context.getApplicationContext());
+                GrapeBadgeBridge.syncCachedAsync(context.getApplicationContext());
                 StringBuilder sb = new StringBuilder();
                 for (GrapeBadges.Entry e : result.entries) {
                     if (e.enabled) {
