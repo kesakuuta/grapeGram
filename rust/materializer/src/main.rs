@@ -561,7 +561,7 @@ fn run() -> Result<(), String> {
     user_cell = patch_once(
         &user_cell,
         "        if (currentUser != null && MessagesController.getInstance(currentAccount).isPremiumUser(currentUser) && !MessagesController.getInstance(currentAccount).premiumFeaturesBlocked()) {\n",
-        "        BadgeDTO grapeBadgeInfo = currentUser == null ? null : BadgesController.INSTANCE.getBadge(currentUser);\n        if (grapeBadgeInfo != null) {\n            grapeBadge.set(grapeBadgeInfo.getDocumentId(), false);\n            grapeBadge.setColor(Theme.getColor(Theme.key_chats_verifiedBackground, resourcesProvider));\n            nameTextView.setRightDrawable(grapeBadge);\n            nameTextView.setRightDrawableTopPadding(-dp(0.5f));\n        } else if (currentUser != null && MessagesController.getInstance(currentAccount).isPremiumUser(currentUser) && !MessagesController.getInstance(currentAccount).premiumFeaturesBlocked()) {\n",
+        "        BadgeDTO grapeBadgeInfo = currentUser == null ? null : BadgesController.INSTANCE.getBadge(currentUser);\n        if (grapeBadgeInfo != null) {\n            grapeBadge.set(grapeBadgeInfo.getDocumentId(), false);\n            grapeBadge.setColor(Theme.getColor(Theme.key_chats_verifiedBackground, resourcesProvider));\n            grapeBadge.setParticles(true, false);\n            nameTextView.setRightDrawable(grapeBadge);\n            nameTextView.setRightDrawableTopPadding(-dp(0.5f));\n        } else if (currentUser != null && MessagesController.getInstance(currentAccount).isPremiumUser(currentUser) && !MessagesController.getInstance(currentAccount).premiumFeaturesBlocked()) {\n",
         "UserCell badge display",
     )?;
     user_cell = patch_once(
