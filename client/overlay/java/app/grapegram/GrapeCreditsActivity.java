@@ -37,6 +37,7 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
     private int designHeaderRow;
     private int designRow;
     private int studioRow;
+    private int iconAuthorsRow;
     private int designShadowRow;
     private int aboutHeaderRow;
     private int aboutRow;
@@ -63,6 +64,7 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
         designHeaderRow = addRow();
         designRow = addRow();
         studioRow = addRow();
+        iconAuthorsRow = addRow();
         designShadowRow = addRow();
         aboutHeaderRow = addRow();
         aboutRow = addRow();
@@ -143,7 +145,12 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
                     TextInfoPrivacyCell cell = (TextInfoPrivacyCell) holder.itemView;
                     cell.setBackground(Theme.getThemedDrawable(mContext,
                             R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
-                    if (position == aboutRow) {
+                    if (position == iconAuthorsRow) {
+                        cell.setText("Авторы community-иконок exteraGram по upstream-каталогу: "
+                                + "whatwherewhywhen, cIick_cIack, impulz3, nekto_nkt, MilesBlooper, "
+                                + "nneeuurr, n1ksly, weizoqq, ataeshi и Slucket. "
+                                + "Официальные варианты указаны за exteraGram.");
+                    } else if (position == aboutRow) {
                         cell.setText("grapeGram — независимый Android-клиент на основе закреплённой версии exteraless. "
                                 + "Проект объединяет расширенные настройки, плагины, AyuMoments, AI и систему "
                                 + "подписанных пользовательских бейджей. Это неофициальный проект, не связанный "
@@ -196,7 +203,7 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
                     || position == designShadowRow || position == aboutShadowRow || position == licenseShadowRow) {
                 return TYPE_SHADOW;
             }
-            if (position == aboutRow || position == licenseRow) {
+            if (position == iconAuthorsRow || position == aboutRow || position == licenseRow) {
                 return TYPE_INFO_PRIVACY;
             }
             return TYPE_SETTINGS;
