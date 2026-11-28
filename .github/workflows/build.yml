@@ -200,13 +200,20 @@ jobs:
           grep -q 'android:icon="@drawable/grape_icon_original"' "$RUNNER_TEMP/base/TMessagesProj/src/main/AndroidManifest.xml"
           grep -q '<string name="AppName">grapeGram</string>' "$RUNNER_TEMP/base/TMessagesProj/src/main/res/values/strings.xml"
           echo "identity: package=app.grapegram name=grapeGram icon=grape"
-      - name: Install release keystore
+      - name: Install and validate release signing credentials
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64" || { echo "KEYSTORE_BASE64 secret is required"; exit 1; }
+          test -n "$KEYSTORE_PASS" || { echo "KEYSTORE_PASS secret is required"; exit 1; }
+          test -n "$ALIAS_NAME" || { echo "ALIAS_NAME secret is required"; exit 1; }
+          test -n "$ALIAS_PASS" || { echo "ALIAS_PASS secret is required"; exit 1; }
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/base/TMessagesProj/release.keystore"
           test -s "$RUNNER_TEMP/base/TMessagesProj/release.keystore"
-          echo "release keystore installed (not committed)"
+          keytool -list -keystore "$RUNNER_TEMP/base/TMessagesProj/release.keystore" \
+            -storepass "$KEYSTORE_PASS" -alias "$ALIAS_NAME" > /dev/null
+          echo "release signing credentials validated (secrets not printed)"
       - name: Chaquopy build python
         run: echo "CHAQUOPY_BUILD_PYTHON=$(command -v python3.11)" >> "$GITHUB_ENV"
       - name: Release APK + AAB (signed)
