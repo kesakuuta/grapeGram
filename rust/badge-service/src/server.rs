@@ -153,6 +153,12 @@ impl Server {
             {
                 return Err(ApiError::NotFound);
             }
+            if name == "audit.jsonl" {
+                let token = request.header("authorization")
+                    .strip_prefix("Bearer ")
+                    .unwrap_or("");
+                self.store.require_owner(token)?;
+            }
             for folder in ["", "signatures"] {
                 let path = if folder.is_empty() {
                     self.store.data_dir().join(name)
