@@ -25,13 +25,15 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
     private final String animation;
     private int styleAlpha;
     private int viewAlpha = 255;
+    private boolean frameScheduled;
 
     private final Runnable frameRunnable = new Runnable() {
         @Override
         public void run() {
-            invalidateSelf();
+            frameScheduled = false;
             if (getCallback() != null && isAnimated()) {
-                scheduleSelf(this, SystemClock.uptimeMillis() + 72);
+                invalidateSelf();
+                scheduleNextFrame();
             }
         }
     };
@@ -99,11 +101,9 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
         return "pulse".equals(animation) || "sparkle".equals(animation) || "glow".equals(animation);
     }
 
-    @Override
-    public void setCallback(Callback callback) {
-        unscheduleSelf(frameRunnable);
-        super.setCallback(callback);
-        if (callback != null && isAnimated()) {
+    private void scheduleNextFrame() {
+        if (!frameScheduled && getCallback() != null && isAnimated()) {
+            frameScheduled = true;
             scheduleSelf(frameRunnable, SystemClock.uptimeMillis() + 72);
         }
     }
@@ -159,6 +159,10 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
             canvas.drawCircle(cx + size * 0.31f, cy - size * 0.16f, dot * 0.75f, particlesPaint);
             canvas.drawCircle(cx + size * 0.12f, cy + size * 0.34f, dot * 0.65f, particlesPaint);
         }
+
+        // Drawable.setCallback() is final on Android. Start the animation from
+        // draw(), once the parent has attached its callback, instead.
+        scheduleNextFrame();
     }
 
     @Override
