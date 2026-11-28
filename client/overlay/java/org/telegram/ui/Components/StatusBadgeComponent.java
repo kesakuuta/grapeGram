@@ -116,7 +116,7 @@ public class StatusBadgeComponent {
     public void onAttachedToWindow() {
         statusDrawable.attach();
         if (currentDrawable instanceof GrapeBadgeDrawable) {
-            ((GrapeBadgeDrawable) currentDrawable).setCallbackdrawableCallback;
+            ((GrapeBadgeDrawable) currentDrawable).setCallback(drawableCallback);
         }
     }
 
