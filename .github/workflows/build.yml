@@ -3,6 +3,8 @@ name: build
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'data/**'
   pull_request:
   workflow_dispatch:
 
