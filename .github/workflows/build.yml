@@ -132,7 +132,7 @@ jobs:
             SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           fi
           echo "using $SDKMANAGER"
-          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          yes | "$SDKMANAGER" --licenses > /dev/null
           "$SDKMANAGER" --install \
             "platforms;android-37.0" \
             "platforms;android-37.2" \
