@@ -537,6 +537,47 @@ fn run() -> Result<(), String> {
     )?;
     write_file(&profile_path, &profile)?;
 
+    // Surface verified grapeGram badges in Telegram's reusable dialog/member rows.
+    let user_cell_path = proj.join("src/main/java/org/telegram/ui/Cells/UserCell.java");
+    let mut user_cell = read_file(&user_cell_path)?;
+    user_cell = patch_once(
+        &user_cell,
+        "import org.telegram.messenger.FileLog;\n",
+        "import org.telegram.messenger.FileLog;\nimport com.exteragram.messenger.api.dto.BadgeDTO;\nimport com.exteragram.messenger.badges.BadgesController;\n",
+        "UserCell badge imports",
+    )?;
+    user_cell = patch_once(
+        &user_cell,
+        "    private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable emojiStatus;\n",
+        "    private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable emojiStatus;\n    private final AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable grapeBadge;\n",
+        "UserCell badge drawable field",
+    )?;
+    user_cell = patch_once(
+        &user_cell,
+        "        emojiStatus = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(nameTextView, dp(20));\n",
+        "        emojiStatus = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(nameTextView, dp(20));\n        grapeBadge = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(nameTextView, dp(20));\n",
+        "UserCell badge drawable init",
+    )?;
+    user_cell = patch_once(
+        &user_cell,
+        "        if (currentUser != null && MessagesController.getInstance(currentAccount).isPremiumUser(currentUser) && !MessagesController.getInstance(currentAccount).premiumFeaturesBlocked()) {\n",
+        "        BadgeDTO grapeBadgeInfo = currentUser == null ? null : BadgesController.INSTANCE.getBadge(currentUser);\n        if (grapeBadgeInfo != null) {\n            grapeBadge.set(grapeBadgeInfo.getDocumentId(), false);\n            grapeBadge.setColor(Theme.getColor(Theme.key_chats_verifiedBackground, resourcesProvider));\n            nameTextView.setRightDrawable(grapeBadge);\n            nameTextView.setRightDrawableTopPadding(-dp(0.5f));\n        } else if (currentUser != null && MessagesController.getInstance(currentAccount).isPremiumUser(currentUser) && !MessagesController.getInstance(currentAccount).premiumFeaturesBlocked()) {\n",
+        "UserCell badge display",
+    )?;
+    user_cell = patch_once(
+        &user_cell,
+        "        emojiStatus.attach();\n        botVerification.attach();\n",
+        "        emojiStatus.attach();\n        botVerification.attach();\n        grapeBadge.attach();\n",
+        "UserCell badge attach",
+    )?;
+    user_cell = patch_once(
+        &user_cell,
+        "        emojiStatus.detach();\n        botVerification.detach();\n",
+        "        emojiStatus.detach();\n        botVerification.detach();\n        grapeBadge.detach();\n",
+        "UserCell badge detach",
+    )?;
+    write_file(&user_cell_path, &user_cell)?;
+
     let nox = "NOX(\"NoxIcon\", R.mipmap.icon_2_background_sa, R.mipmap.icon_foreground_sa, R.string.AppIconNox);";
     let enum_replacement = format!(
         "{},\n{};",
