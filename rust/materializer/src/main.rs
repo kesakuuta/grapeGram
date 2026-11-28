@@ -18,6 +18,25 @@ const ICONS: [(&str, &str); 9] = [
     ("graphite", "Графит"),
     ("violet", "Фиалка"),
 ];
+const EXT_ICONS: [(&str, &str); 17] = [
+    ("mole", "Mole"),
+    ("echpochmak", "Echpochmak"),
+    ("avatar", "Avatar"),
+    ("candy", "Candy"),
+    ("guitar", "Guitar"),
+    ("frog", "Frog"),
+    ("hamster", "Hamster"),
+    ("sponge", "Sponge"),
+    ("flappy", "Flappy"),
+    ("nyan_cat", "Nyan Cat"),
+    ("fish", "Fish"),
+    ("psychosis", "Psychosis"),
+    ("xp", "XP"),
+    ("nasa", "NASA"),
+    ("jellyfish", "Jellyfish"),
+    ("human", "Human"),
+    ("osu", "osu!"),
+];
 
 #[derive(Deserialize)]
 struct Config {
@@ -319,14 +338,14 @@ fn nested_string(root: &Value, path: &[&str]) -> Option<String> {
     cur.as_str().map(|s| s.to_string())
 }
 
-fn alias_template(key: &str, enabled: bool) -> String {
+fn alias_template(key: &str, icon_res: &str, enabled: bool) -> String {
     format!(
         r#"        <activity-alias
             android:enabled="{enabled}"
             android:name="org.telegram.messenger.GrapeIcon{camel}"
             android:targetActivity="org.telegram.ui.LaunchActivity"
-            android:icon="@drawable/grape_icon_{key}"
-            android:roundIcon="@drawable/grape_icon_{key}"
+            android:icon="{icon}"
+            android:roundIcon="{icon}"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -339,24 +358,32 @@ fn alias_template(key: &str, enabled: bool) -> String {
 "#,
         enabled = if enabled { "true" } else { "false" },
         camel = camel(key),
-        key = key
+        icon = icon_res
     )
 }
 
 fn enum_entries() -> String {
-    ICONS
-        .iter()
-        .map(|(key, _)| {
-            format!(
-                "        GRAPE_{}(\"GrapeIcon{}\", R.drawable.grape_icon_{}, R.drawable.app_icon_empty_foreground, R.string.GrapeIcon{})",
-                key.to_uppercase(),
-                camel(key),
-                key,
-                camel(key)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",\n")
+    let mut entries = Vec::new();
+    for (key, _) in ICONS.iter() {
+        entries.push(format!(
+            "        GRAPE_{}(\"GrapeIcon{}\", R.drawable.grape_icon_{}, R.drawable.app_icon_empty_foreground, R.string.GrapeIcon{})",
+            key.to_uppercase(),
+            camel(key),
+            key,
+            camel(key)
+        ));
+    }
+    for (id, _) in EXT_ICONS.iter() {
+        entries.push(format!(
+            "        EXT_{}(\"GrapeIcon{}\", R.drawable.ext_{}_background, R.drawable.ext_{}_foreground, R.string.GrapeIcon{})",
+            id.to_uppercase(),
+            camel(id),
+            id,
+            id,
+            camel(id)
+        ));
+    }
+    entries.join(",\n")
 }
 
 fn run() -> Result<(), String> {
@@ -442,7 +469,73 @@ fn run() -> Result<(), String> {
     s = patch_once(&s, row_anchor, &row, "settings row")?;
     s = patch_once(&s, case_anchor, &format!("{}{}", new_case, case_anchor), "settings click")?;
     s = patch_once(&s, old_row, "        // exteraless entry moved into the grapeGram hub\n", "remove old top-level entry")?;
+    s = patch_once(
+        &s,
+        "            case -1: {\n                presentFragment(new OpenExteraSettingsActivity());\n                break;\n            }\n",
+        "            case -1: {\n                presentFragment(new app.grapegram.GrapeSettingsActivity());\n                break;\n            }\n",
+        "settings legacy route",
+    )?;
     write_file(&settings_path, &s)?;
+
+    let launch_path = proj.join("src/main/java/org/telegram/ui/LaunchActivity.java");
+    let mut launch = read_file(&launch_path)?;
+    launch = patch_once(
+        &launch,
+        "                } else if (open_settings == 100) {\n                    fragment = new OpenExteraSettingsActivity();\n",
+        "                } else if (open_settings == 100) {\n                    fragment = new app.grapegram.GrapeSettingsActivity();\n",
+        "launch settings route",
+    )?;
+    write_file(&launch_path, &launch)?;
+
+    let menu_path = proj.join("src/main/java/app/exteraless/drawer/MainMenuHelper.java");
+    let mut menu = read_file(&menu_path)?;
+    menu = patch_once(
+        &menu,
+        "                return new MenuItemInfo(R.drawable.exteraless_icon_tile, LocaleController.getString(R.string.OpenExteraPreferences),\n                        () -> fragment.presentFragment(new OpenExteraSettingsActivity()), null);\n",
+        "                return new MenuItemInfo(R.drawable.grape_icon_original, LocaleController.getString(R.string.OpenExteraPreferences),\n                        () -> fragment.presentFragment(new app.grapegram.GrapeSettingsActivity()), null);\n",
+        "drawer settings route",
+    )?;
+    write_file(&menu_path, &menu)?;
+
+    let theme_path = proj.join("src/main/java/org/telegram/ui/ThemeActivity.java");
+    let mut theme = read_file(&theme_path)?;
+    theme = patch_once(
+        &theme,
+        "            appIconHeaderRow = rowCount++;\n            appIconSelectorRow = rowCount++;\n            appIconShadowRow = rowCount++;\n",
+        "            appIconHeaderRow = -1;\n            appIconSelectorRow = -1;\n            appIconShadowRow = -1;\n",
+        "remove duplicate icon picker",
+    )?;
+    write_file(&theme_path, &theme)?;
+
+    let other_path = proj.join("src/main/java/app/exteraless/settings/OpenExteraOtherActivity.java");
+    let mut other = read_file(&other_path)?;
+    other = patch_once(
+        &other,
+        "        nagramHeaderRow = addRow(\"nagramHeader\");\n        nagramSettingsRow = -1;\n        ayuMomentsRow = addRow(\"ayuMoments\");\n        nagramDividerRow = addRow();\n",
+        "        nagramHeaderRow = -1;\n        nagramSettingsRow = -1;\n        ayuMomentsRow = -1;\n        nagramDividerRow = -1;\n",
+        "remove duplicate ayumoments entry",
+    )?;
+    write_file(&other_path, &other)?;
+
+    let chats_path = proj.join("src/main/java/app/exteraless/settings/OpenExteraChatsActivity.java");
+    let mut chats = read_file(&chats_path)?;
+    chats = patch_once(
+        &chats,
+        "        aiChatRow = addRow(\"aiChat\");\n",
+        "        aiChatRow = -1;\n",
+        "remove duplicate ai entry",
+    )?;
+    write_file(&chats_path, &chats)?;
+
+    let profile_path = proj.join("src/main/java/org/telegram/ui/ProfileActivity.java");
+    let mut profile = read_file(&profile_path)?;
+    profile = patch_once(
+        &profile,
+        "        badgeDrawable.setParticles(false, animated);\n",
+        "        badgeDrawable.setParticles(true, animated);\n",
+        "badge particles",
+    )?;
+    write_file(&profile_path, &profile)?;
 
     let nox = "NOX(\"NoxIcon\", R.mipmap.icon_2_background_sa, R.mipmap.icon_foreground_sa, R.string.AppIconNox);";
     let enum_replacement = format!(
@@ -469,7 +562,10 @@ fn run() -> Result<(), String> {
     let mut m = disable_alias(&manifest_before, "org.telegram.messenger.ExteralessIcon")?;
     let aliases = ICONS
         .iter()
-        .map(|(key, _)| alias_template(key, *key == "original"))
+        .map(|(key, _)| alias_template(key, &format!("@drawable/grape_icon_{}", key), *key == "original"))
+        .chain(EXT_ICONS.iter().map(|(id, _)| {
+            alias_template(id, &format!("@mipmap/ext_icon_{}", id), false)
+        }))
         .collect::<String>();
     m = patch_once(&m, "    </application>", &format!("{}    </application>", aliases), "manifest aliases")?;
     m = patch_application_tag(
@@ -493,6 +589,11 @@ fn run() -> Result<(), String> {
     let add = ICONS
         .iter()
         .map(|(key, name)| format!("    <string name=\"GrapeIcon{}\">{}</string>\n", camel(key), name))
+        .chain(
+            EXT_ICONS
+                .iter()
+                .map(|(id, name)| format!("    <string name=\"GrapeIcon{}\">{}</string>\n", camel(id), name)),
+        )
         .collect::<String>();
     let (st_new, n) = set_xml_string(&st, "AppName", APP_NAME);
     if n != 1 {
@@ -842,7 +943,8 @@ fn run() -> Result<(), String> {
     }
 
     println!(
-        "applied: 9 icon aliases, settings entry, enum, strings, package {}, data_base {}",
+        "applied: {} icon aliases, settings entry, enum, strings, package {}, data_base {}",
+        ICONS.len() + EXT_ICONS.len(),
         PACKAGE, data_base
     );
     Ok(())
@@ -914,7 +1016,8 @@ mod tests {
         assert!(enums.contains("GRAPE_ORIGINAL(\"GrapeIconOriginal\""));
         assert!(enums.contains("GRAPE_SILK(\"GrapeIconSilk\""));
         assert_eq!(enums.matches("GRAPE_").count(), 9);
-        let alias = alias_template("original", true);
+        assert_eq!(enums.matches("EXT_").count(), 17);
+        let alias = alias_template("original", "@drawable/grape_icon_original", true);
         assert!(alias.contains("android:enabled=\"true\""));
         assert!(alias.contains("org.telegram.messenger.GrapeIconOriginal"));
         assert!(alias.contains("@drawable/grape_icon_original"));

@@ -27,6 +27,9 @@ import app.exteraless.plugins.ui.PluginsActivity;
 import app.exteraless.settings.OpenExteraAppearanceActivity;
 import app.exteraless.settings.OpenExteraAyuMomentsActivity;
 import app.exteraless.settings.OpenExteraChatsActivity;
+import app.exteraless.settings.OpenExteraCloudActivity;
+import app.exteraless.settings.OpenExteraGeneralActivity;
+import app.exteraless.settings.OpenExteraOtherActivity;
 
 /** The single grapeGram settings hub, built from Telegram's own settings cells. */
 public class GrapeSettingsActivity extends BaseFragment {
@@ -38,6 +41,9 @@ public class GrapeSettingsActivity extends BaseFragment {
     private static final int ID_PLUGINS = 5;
     private static final int ID_BADGES = 6;
     private static final int ID_CREDITS = 7;
+    private static final int ID_GENERAL = 8;
+    private static final int ID_OTHER = 9;
+    private static final int ID_CLOUD = 10;
 
     private UniversalRecyclerView listView;
 
@@ -84,6 +90,13 @@ public class GrapeSettingsActivity extends BaseFragment {
                 "AyuMoments", "истории и статусы"));
         items.add(UItem.asShadow(null));
 
+        items.add(UItem.asHeader("Поведение"));
+        items.add(row(ID_GENERAL, IconBackgroundColors.GREEN_DEEP, R.drawable.msg_media,
+                "Общие", "переводчик, сеть, уведомления"));
+        items.add(row(ID_OTHER, IconBackgroundColors.GRAY, R.drawable.msg_fave,
+                "Другое", "эксперименты и резервные копии"));
+        items.add(UItem.asShadow(null));
+
         items.add(UItem.asHeader("Интеллект и расширения"));
         items.add(row(ID_AI, IconBackgroundColors.CYAN, R.drawable.msg_bot,
                 "AI", "провайдеры и модели"));
@@ -94,6 +107,8 @@ public class GrapeSettingsActivity extends BaseFragment {
         items.add(UItem.asHeader("О приложении"));
         items.add(row(ID_BADGES, IconBackgroundColors.BLUE_DEEP, R.drawable.filled_profile_settings,
                 "Бейджи", "подписанный список из GitHub"));
+        items.add(row(ID_CLOUD, IconBackgroundColors.CYAN, R.drawable.cloud_sync,
+                "Облако", "резервная копия настроек"));
         items.add(row(ID_CREDITS, IconBackgroundColors.ORANGE_DEEP, R.drawable.settings_ask,
                 "Авторы и благодарности", "Cherrygram · exteraGram · exteraless"));
     }
@@ -113,6 +128,12 @@ public class GrapeSettingsActivity extends BaseFragment {
             case ID_AYU:
                 presentFragment(new OpenExteraAyuMomentsActivity());
                 break;
+            case ID_GENERAL:
+                presentFragment(new OpenExteraGeneralActivity());
+                break;
+            case ID_OTHER:
+                presentFragment(new OpenExteraOtherActivity());
+                break;
             case ID_AI:
                 presentFragment(new AiSettingsActivity());
                 break;
@@ -121,6 +142,9 @@ public class GrapeSettingsActivity extends BaseFragment {
                 break;
             case ID_BADGES:
                 showBadges();
+                break;
+            case ID_CLOUD:
+                presentFragment(new OpenExteraCloudActivity());
                 break;
             case ID_CREDITS:
                 presentFragment(new GrapeCreditsActivity());
