@@ -904,13 +904,26 @@ fn run() -> Result<(), String> {
         "        val grapeTranslateKey = tw.nekomimi.nekogram.NekoConfig.googleCloudTranslateKey.String()\n        if (grapeTranslateKey.isEmpty()) {\n            error(\"Google Translate API key is not set\")\n        }\n        val urlBuilder = HttpUrl.Builder().scheme(\"https\").host(\"translate-pa.googleapis.com\")",
         "google translate key check",
     )?;
-    let preset_google_key = concat!("AIzaSyDLEeFI5", "OtFBwYBIoK_jj5m32rZK5CkCXA");
-    google_translate = patch_once(
-        &google_translate,
-        &format!(".addQueryParameter(\"key\", \"{}\")", preset_google_key),
-        ".addQueryParameter(\"key\", grapeTranslateKey)",
-        "remove preset google api key",
-    )?;
+    // Remove the bundled upstream key without copying its value into grapeGram.
+    // Match the single key parameter by syntax and preserve the original indentation.
+    let key_parameter = ".addQueryParameter(\"key\",";
+    let key_lines: Vec<&str> = google_translate
+        .lines()
+        .filter(|line| line.contains(key_parameter))
+        .collect();
+    if key_lines.len() != 1 {
+        return Err(format!(
+            "google translate key parameter: found {}, expected exactly 1",
+            key_lines.len()
+        ));
+    }
+    let old_key_line = key_lines[0];
+    let indentation = &old_key_line[..old_key_line.len() - old_key_line.trim_start().len()];
+    let replacement_key_line = format!(
+        "{}.addQueryParameter(\"key\", grapeTranslateKey)",
+        indentation
+    );
+    google_translate = google_translate.replacen(old_key_line, &replacement_key_line, 1);
     write_file(&google_translate_path, &google_translate)?;
 
     let translator_path = proj
