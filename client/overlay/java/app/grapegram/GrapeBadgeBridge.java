@@ -1,6 +1,7 @@
 package app.grapegram;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 
 import com.exteragram.messenger.api.dto.BadgeDTO;
 import com.exteragram.messenger.api.model.ProfileStatus;
@@ -12,6 +13,10 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.UserConfig;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+
 /** Feeds the verified grapeGram list into the badge engine already present in exteraless. */
 public final class GrapeBadgeBridge {
 
@@ -19,6 +24,8 @@ public final class GrapeBadgeBridge {
     private static final long FOUNDER = 5220045200780458122L;
     private static final long DEVELOPER = 5411229175971322671L;
     private static final long CONTRIBUTOR = 5393391313502609448L;
+    private static final String PREFS = "grape_badge_bridge";
+    private static final String KEY_SYNCED_IDS = "synced_user_ids";
 
     private GrapeBadgeBridge() {
     }
@@ -27,25 +34,66 @@ public final class GrapeBadgeBridge {
         Utilities.globalQueue.postRunnable(() -> sync(context.getApplicationContext()));
     }
 
-    public static void sync(Context context) {
+    public static synchronized void sync(Context context) {
         GrapeBadges.Result result = GrapeBadges.load(context, false);
         if (!result.ok) {
             return;
         }
-        for (GrapeBadges.Entry entry : result.entries) {
-            long id;
+
+        // Remove only entries previously installed by grapeGram. ApiBadgeSource is
+        // shared with the host client, so clearing the entire source would erase
+        // badges owned by other integrations.
+        SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        Set<String> previousIds = new HashSet<>(
+                prefs.getStringSet(KEY_SYNCED_IDS, Collections.<String>emptySet()));
+        Set<String> nextIds = new HashSet<>();
+        for (String previousId : previousIds) {
             try {
-                id = Long.parseLong(entry.userId);
-            } catch (NumberFormatException ignore) {
+                long id = Long.parseLong(previousId);
+                BadgeInfo existing = BadgesController.INSTANCE.getApiBadgeSource().getInfo(id);
+                if (existing != null && isGrapeGramDocument(existing.getBadge().getDocumentId())) {
+                    BadgesController.INSTANCE.getApiBadgeSource().put(id, null);
+                }
+            } catch (RuntimeException ignored) {
+                // Ignore malformed IDs from an older local cache.
+            }
+        }
+
+        for (GrapeBadges.Entry entry : result.entries) {
+            if (!entry.enabled || !isKnownBadge(entry.badge)) {
                 continue;
             }
+            final long id;
+            try {
+                id = Long.parseLong(entry.userId);
+                if (id <= 0) {
+                    continue;
+                }
+            } catch (NumberFormatException ignored) {
+                continue;
+            }
+
             long documentId = documentId(entry.badge);
+            ProfileStatus status = "developer".equals(entry.badge)
+                    ? ProfileStatus.DEVELOPER : ProfileStatus.SUPPORTER;
             BadgesController.INSTANCE.getApiBadgeSource().put(id,
-                    new BadgeInfo(new BadgeDTO(documentId, "grapeGram"),
-                            ProfileStatus.SUPPORTER, false));
+                    new BadgeInfo(new BadgeDTO(documentId, "grapeGram"), status, false));
+            nextIds.add(Long.toString(id));
         }
+        prefs.edit().putStringSet(KEY_SYNCED_IDS, nextIds).apply();
+
         NotificationCenter.getInstance(UserConfig.selectedAccount).postNotificationName(
                 NotificationCenter.updateInterfaces, MessagesController.UPDATE_MASK_EMOJI_STATUS);
+    }
+
+    private static boolean isKnownBadge(String badge) {
+        return "grapegram".equals(badge) || "founder".equals(badge)
+                || "developer".equals(badge) || "contributor".equals(badge);
+    }
+
+    private static boolean isGrapeGramDocument(long documentId) {
+        return documentId == GRAPEGRAM || documentId == FOUNDER
+                || documentId == DEVELOPER || documentId == CONTRIBUTOR;
     }
 
     private static long documentId(String badge) {
