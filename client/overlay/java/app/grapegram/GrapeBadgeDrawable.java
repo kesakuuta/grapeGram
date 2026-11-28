@@ -6,8 +6,12 @@ import android.graphics.ColorFilter;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.os.SystemClock;
+
+import org.telegram.messenger.LiteMode;
+import org.telegram.ui.Stars.StarsReactionsSheet;
 
 /** Small animated badge marker, composable with Telegram's existing status drawable. */
 public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callback {
@@ -15,7 +19,7 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
     private final Drawable primary;
     private final Drawable icon;
     private final Paint background = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint particlesPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final StarsReactionsSheet.Particles particleEffect;
     private final Paint glowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final int size;
     private final int gap;
@@ -54,11 +58,13 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
         this.gap = Math.max(0, gap);
         this.reverse = reverse;
         this.styleAlpha = Math.max(0, Math.min(255, alpha));
-        this.particles = particles;
+        this.particles = particles || "sparkle".equals(animation);
         this.animation = animation == null ? "none" : animation;
+        this.particleEffect = this.particles
+                ? new StarsReactionsSheet.Particles(StarsReactionsSheet.Particles.TYPE_RADIAL, 8)
+                : null;
         background.setColor(Color.rgb(Color.red(badgeColor), Color.green(badgeColor), Color.blue(badgeColor)));
         colorAlpha = Color.alpha(badgeColor);
-        particlesPaint.setColor(Color.rgb(Color.red(badgeColor), Color.green(badgeColor), Color.blue(badgeColor)));
         glowPaint.setColor(Color.rgb(Color.red(badgeColor), Color.green(badgeColor), Color.blue(badgeColor)));
         if (primary != null) {
             primary.setCallback(this);
@@ -98,7 +104,8 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
     }
 
     private boolean isAnimated() {
-        return particles || "pulse".equals(animation) || "sparkle".equals(animation) || "glow".equals(animation);
+        return (particles && LiteMode.isEnabled(LiteMode.FLAG_PARTICLES))
+                || "pulse".equals(animation) || "glow".equals(animation);
     }
 
     private void scheduleNextFrame() {
@@ -146,28 +153,16 @@ public final class GrapeBadgeDrawable extends Drawable implements Drawable.Callb
             icon.draw(canvas);
         }
 
-        if (particles) {
-            // Small orbiting glints stay inside the badge bounds, so they do not
-            // get clipped by Telegram's status-slot layout on compact chat rows.
-            final int count = 5;
-            final float orbit = size * 0.37f;
-            final float baseDot = Math.max(1.0f, size / 15.0f);
-            for (int i = 0; i < count; i++) {
-                float angle = phase * 0.72f + (float) (i * Math.PI * 2.0 / count);
-                float drift = 0.82f + 0.18f * (float) Math.sin(phase + i * 1.31f);
-                float x = cx + (float) Math.cos(angle) * orbit * drift;
-                float y = cy + (float) Math.sin(angle) * orbit * drift;
-                float twinkle = 0.35f + 0.65f
-                        * (0.5f + 0.5f * (float) Math.sin(phase * 2.0f + i * 1.7f));
-                int particleAlpha = (int) (combinedAlpha * colorAlpha / 255.0f * twinkle);
-                if ("sparkle".equals(animation)) {
-                    particleAlpha = Math.min(255, (int) (particleAlpha * 1.18f));
-                }
-                particlesPaint.setAlpha(particleAlpha);
-                float dot = baseDot * (0.75f + 0.45f
-                        * (0.5f + 0.5f * (float) Math.sin(phase + i)));
-                canvas.drawCircle(x, y, dot, particlesPaint);
-            }
+        if (particleEffect != null && LiteMode.isEnabled(LiteMode.FLAG_PARTICLES)) {
+            // Reuse Telegram's radial particle engine, the same primitive used by
+            // Cherrygram's SwapAnimatedEmojiDrawable.setParticles().
+            particleEffect.setBounds(new RectF(badgeLeft - size * 0.35f, top - size * 0.35f,
+                    badgeLeft + size * 1.35f, top + size * 1.35f));
+            particleEffect.process();
+            particleEffect.draw(canvas,
+                    Color.rgb(Color.red(background.getColor()), Color.green(background.getColor()),
+                            Color.blue(background.getColor())),
+                    combinedAlpha / 255.0f);
         }
 
         // Drawable.setCallback() is final on Android. Start the animation from
