@@ -1314,6 +1314,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn removes_only_duplicate_launcher_pngs_shadowed_by_webp() {
+        let root = env::temp_dir().join(format!("grape-materializer-icons-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let mipmap = root.join("mipmap-hdpi");
+        fs::create_dir_all(&mipmap).unwrap();
+        fs::write(mipmap.join("ic_launcher_foreground.png"), b"png").unwrap();
+        fs::write(mipmap.join("ic_launcher_foreground.webp"), b"webp").unwrap();
+        fs::write(mipmap.join("other_icon.png"), b"png").unwrap();
+        fs::write(mipmap.join("other_icon.webp"), b"webp").unwrap();
+
+        assert_eq!(remove_duplicate_launcher_pngs(&root).unwrap(), 1);
+        assert!(!mipmap.join("ic_launcher_foreground.png").exists());
+        assert!(mipmap.join("ic_launcher_foreground.webp").exists());
+        assert!(mipmap.join("other_icon.png").exists());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn patch_once_counts_anchors() {
         assert_eq!(patch_once("a X b", "X", "Y", "t").unwrap(), "a Y b");
         assert!(patch_once("a X X b", "X", "Y", "t").is_err());
