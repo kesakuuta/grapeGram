@@ -1,0 +1,28 @@
+[Unit]
+Description=grapeGram Telegram badge admin bot (long polling)
+After=network-online.target grapegram-badges.service
+Wants=network-online.target
+Requires=grapegram-badges.service
+
+[Service]
+Type=simple
+User=grapegram
+Group=grapegram
+WorkingDirectory=/opt/grapegram/backend
+EnvironmentFile=/etc/grapegram/badges.env
+Environment=GRP_BOT_OFFSET_FILE=/var/lib/grapegram/bot_offset
+ExecStart=/usr/bin/python3 /opt/grapegram/backend/bot_polling.py
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/var/lib/grapegram
+
+[Install]
+WantedBy=multi-user.target
