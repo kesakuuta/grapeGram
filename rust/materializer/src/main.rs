@@ -565,7 +565,7 @@ fn run() -> Result<(), String> {
     build_gradle = patch_once(
         &build_gradle,
         "configurations.configureEach {\n",
-        "configurations.configureEach {\n    exclude group: 'org.bouncycastle', module: 'bcprov-jdk15to18'\n",
+        "configurations.configureEach {\n    resolutionStrategy.dependencySubstitution {\n        substitute(module('org.bouncycastle:bcprov-jdk15to18')).using(module('org.bouncycastle:bcprov-jdk18on:1.83'))\n    }\n    exclude group: 'org.bouncycastle', module: 'bcprov-jdk15to18'\n",
         "exclude legacy Bouncy Castle provider",
     )?;
     build_gradle = patch_once(
@@ -1532,6 +1532,7 @@ fn run() -> Result<(), String> {
     let build_gradle = read_file(&build_path)?;
     expect_count(&build_gradle, "org.bouncycastle:bcprov-jdk18on:1.83", 1, "verify Ed25519 verifier dependency")?;
     expect_count(&build_gradle, "module: 'bcprov-jdk15to18'", 1, "verify legacy Bouncy Castle exclusion")?;
+    expect_count(&build_gradle, "substitute(module('org.bouncycastle:bcprov-jdk15to18')).using(module('org.bouncycastle:bcprov-jdk18on:1.83'))", 1, "verify legacy Bouncy Castle module substitution")?;
     expect_count(&build_gradle, "exclude group: 'org.bouncycastle', module: 'bcprov-jdk15to18'", 1, "verify legacy Bouncy Castle exclusion")?;
     let props = read_file(&props_path)?;
     if get_gradle_property(&props, "APP_PACKAGE")? != PACKAGE {
