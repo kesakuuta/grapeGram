@@ -558,23 +558,8 @@ fn run() -> Result<(), String> {
     copy_dir(&client_dir.join("overlay/java"), &proj.join("src/main/java"))?;
     copy_dir(&client_dir.join("overlay/res"), &proj.join("src/main/res"))?;
 
-    // GrapeBadges uses BC's lightweight Ed25519 verifier. One upstream
-    // dependency already brings the legacy jdk15to18 artifact; exclude it to
-    // prevent duplicate classes when adding the maintained jdk18on artifact.
-    let mut build_gradle = read_file(&build_path)?;
-    build_gradle = patch_once(
-        &build_gradle,
-        "configurations.configureEach {\n",
-        "configurations.configureEach {\n    resolutionStrategy.dependencySubstitution {\n        substitute(module('org.bouncycastle:bcprov-jdk15to18')).using(module('org.bouncycastle:bcprov-jdk18on:1.83'))\n    }\n    exclude group: 'org.bouncycastle', module: 'bcprov-jdk15to18'\n",
-        "exclude legacy Bouncy Castle provider",
-    )?;
-    build_gradle = patch_once(
-        &build_gradle,
-        "dependencies {\n",
-        "dependencies {\n    implementation 'org.bouncycastle:bcprov-jdk18on:1.83'\n",
-        "Ed25519 verifier dependency",
-    )?;
-    write_file(&build_path, &build_gradle)?;
+    // The pinned base app already provides Bouncy Castle transitively.
+    // Do not add a second provider artifact: duplicate classes break AGP packaging.
 
     let pem_path = client_dir
         .parent()
@@ -1530,10 +1515,9 @@ fn run() -> Result<(), String> {
     expect_count(&icon_resolver, "getSelectedIcon", 1, "verify dynamic grapeGram icon resolver")?;
     expect_count(&icon_resolver, "GrapeCherryIcon", 18, "verify Cherrygram icon resolver aliases")?;
     let build_gradle = read_file(&build_path)?;
-    expect_count(&build_gradle, "implementation 'org.bouncycastle:bcprov-jdk18on:1.83'", 1, "verify Ed25519 verifier dependency")?;
-    expect_count(&build_gradle, "module: 'bcprov-jdk15to18'", 1, "verify legacy Bouncy Castle exclusion")?;
-    expect_count(&build_gradle, "substitute(module('org.bouncycastle:bcprov-jdk15to18')).using(module('org.bouncycastle:bcprov-jdk18on:1.83'))", 1, "verify legacy Bouncy Castle module substitution")?;
-    expect_count(&build_gradle, "exclude group: 'org.bouncycastle', module: 'bcprov-jdk15to18'", 1, "verify legacy Bouncy Castle exclusion")?;
+    if build_gradle.contains("org.bouncycastle:bcprov-jdk15to18") {
+        return Err("verify: legacy Bouncy Castle provider must not be added".to_string());
+    }
     let props = read_file(&props_path)?;
     if get_gradle_property(&props, "APP_PACKAGE")? != PACKAGE {
         return Err("verify: APP_PACKAGE is not app.grapegram".to_string());
