@@ -136,7 +136,9 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
                     cell.setBackground(Theme.getThemedDrawable(mContext,
                             R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
                     if (position == licenseRow) {
-                        cell.setText("grapeGram распространяется под GPL-3.0. "
+                        cell.setText("Лицензии проектов: grapeGram, exteraGram и exteraless — GNU GPL-3.0; "
+                                + "Cherrygram — GNU GPL-2.0-or-later. "
+                                + "Иконки и компоненты сохраняют условия и авторские сведения исходных проектов. "
                                 + "Upstream-проекты не поддерживают grapeGram и не связаны с ним.");
                     }
                     break;
@@ -144,11 +146,11 @@ public class GrapeCreditsActivity extends BaseNekoSettingsActivity {
                 case TYPE_SETTINGS: {
                     TextSettingsCell cell = (TextSettingsCell) holder.itemView;
                     if (position == cherrygramRow) {
-                        cell.setTextAndValue("Cherrygram", "основа клиента · GitHub", true);
+                        cell.setTextAndValue("Cherrygram", "бейджи и часть иконок · GitHub", true);
                     } else if (position == exteraGramRow) {
                         cell.setTextAndValue("exteraGram", "плагины и настройки · GitHub", true);
                     } else if (position == exteralessRow) {
-                        cell.setTextAndValue("exteraless", "базовая сборка · GitHub", true);
+                        cell.setTextAndValue("exteraless", "закреплённая база клиента · GitHub", true);
                     } else if (position == cherrygramChannelRow) {
                         cell.setTextAndValue("Канал Cherrygram", "@cherrygram", true);
                     } else if (position == cherrygramSupportRow) {
