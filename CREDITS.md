@@ -34,6 +34,10 @@ grapeGram — производный клиент, собранный повер
   указанные в upstream-ресурсах.
 - [@BlueprintDsgn](https://t.me/BlueprintDsgn) — дизайн-студия, указанная
   в исходных сведениях проекта.
+- Авторы community-иконок exteraGram по upstream-каталогу:
+  `whatwherewhywhen`, `cIick_cIack`, `impulz3`, `nekto_nkt`,
+  `MilesBlooper`, `nneeuurr`, `n1ksly`, `weizoqq`, `ataeshi`,
+  `Slucket`. Официальные варианты указаны за exteraGram.
 
 ## Сообщества
 
