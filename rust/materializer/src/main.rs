@@ -819,12 +819,9 @@ fn run() -> Result<(), String> {
         "    signingConfigs {\n        release {\n            storeType 'PKCS12'\n",
         "signingConfigs.release",
     )?;
-    build = patch_once(
-        &build,
-        "dependencies {\n",
-        "dependencies {\n    implementation 'org.bouncycastle:bcprov-jdk15to18:1.78'\n",
-        "bouncycastle dependency",
-    )?;
+    // Do not pin bcprov-jdk15to18 here. The base app already resolves
+    // bcprov-jdk18on transitively; adding the legacy artifact duplicates
+    // every org.bouncycastle class and makes AGP checkReleaseDuplicateClasses fail.
     build = patch_once(&build, "            version '3.11'", "            version = '3.11'", "chaquopy version assignment")?;
     build = patch_once(&build, "        aidl true", "        aidl = true", "aidl assignment")?;
     build = patch_once(
