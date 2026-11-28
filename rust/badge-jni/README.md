@@ -1,57 +1,47 @@
 # grape-badge-jni
 
-JNI-библиотека проверки Ed25519-подписей бейджей. Убирает зависимость от
-`java.security.Signature("Ed25519")` / BouncyCastle, из-за которой на устройстве
-возникал `NoSuchAlgorithmException`.
+Экспериментальная JNI-обёртка для Ed25519-проверки badge payload.
 
-Сигнатура закрывает **точные байты** `badge_users.json` (канонический JSON без
-переводов строк), как и в `scripts/canonical.py` и `backend/server.py`.
+## Текущее состояние
 
-## Экспортируемые методы
+**Библиотека пока не подключена к APK.** В Java-классе
+`app.grapegram.GrapeBadges` нет native declarations и вызова
+`System.loadLibrary("grapebadge")`; workflow выполняет только
+`cargo check` для этого crate и не собирает `.so` через cargo-ndk.
+
+Рабочая проверка подписи в приложении сейчас выполняется через Android JCA:
+`Signature.getInstance("Ed25519")` с перебором доступных platform providers.
+На Android 13+ это поддерживаемый путь. Не следует считать этот JNI crate
+активным runtime-компонентом или утверждать, что он устраняет ошибки
+`NoSuchAlgorithmException` на устройстве, пока не добавлена загрузка и
+интеграционный тест.
+
+## JNI API
+
+Экспортируемые функции при будущей интеграции:
 
 - `Java_app_grapegram_GrapeBadges_nativeVerify(byte[] payload, String sigB64, String pubPem) -> boolean`
-- `Java_app_grapegram_GrapeBadges_nativeAvailable() -> boolean` (всегда `true`, smoke-test загрузки `.so`)
+- `Java_app_grapegram_GrapeBadges_nativeAvailable() -> boolean`
 
-Любая ошибка (битые входные данные, неверная длина, неверная подпись, panic)
-возвращает `false` — исключение в Java не вылетает.
+Ошибки входных данных и неверная подпись должны возвращать `false`, а не
+пробрасывать panic в Java.
 
-## Сборка
-
-Нужны Android NDK и `cargo install cargo-ndk`. Команда запускается из каталога
-`rust/badge-jni`; `$BASE_ROOT` — корень чистого чекаута базы из материализатора
-(каталог, где лежат `TMessagesProj/` и `gradle.properties`).
+## Проверка crate
 
 ```sh
-cargo ndk \
-  -t arm64-v8a \
-  -t armeabi-v7a \
-  -t x86_64 \
-  -t x86 \
-  -p 23 \
-  -o "$BASE_ROOT/TMessagesProj/jni" \
-  --release \
-  build
+cargo test --manifest-path rust/badge-jni/Cargo.toml
+cargo check --release --manifest-path rust/badge-jni/Cargo.toml
 ```
 
-Результат — по одному файлу на ABI:
+## Будущая интеграция
 
-```
-TMessagesProj/jni/arm64-v8a/libgrapebadge.so
-TMessagesProj/jni/armeabi-v7a/libgrapebadge.so
-TMessagesProj/jni/x86_64/libgrapebadge.so
-TMessagesProj/jni/x86/libgrapebadge.so
-```
+Если JCA provider окажется несовместим на поддерживаемом Android API, интеграция
+потребует всех шагов вместе:
 
-`[lib] name = "grapebadge"` даёт имя `libgrapebadge.so`; `strip = true` и
-`lto = true` в release уменьшают размер. Для загрузки в Java достаточно
-`System.loadLibrary("grapebadge")`.
-
-## Проверка без Android
-
-```sh
-cargo test
-cargo build --release
-```
-
-Тесты покрывают roundtrip подпись/проверка, испорченную подпись, base64 без
-padding и некорректный PEM.
+1. Добавить native declarations и безопасный fallback в `GrapeBadges.java`.
+2. Собрать `libgrapebadge.so` через cargo-ndk для реально поддерживаемых ABI
+   (сейчас upstream/Chaquopy конфигурация использует arm64-v8a и x86_64).
+3. Убедиться, что Gradle включает библиотеки в APK/AAB.
+4. Добавить device/instrumentation test: корректная подпись, неверная подпись,
+   испорченный base64 и отсутствие библиотеки.
+5. Только после этого считать JNI runtime bridge рабочим.
